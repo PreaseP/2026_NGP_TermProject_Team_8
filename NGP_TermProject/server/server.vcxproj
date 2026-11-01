@@ -130,7 +130,9 @@
   <ItemGroup>
     <ClInclude Include="..\common\Common.h" />
     <ClInclude Include="..\common\Inventory.h" />
+    <ClInclude Include="SendRequestQueue.h" />
     <ClCompile Include="..\common\Inventory.cpp" />
+    <ClCompile Include="SendRequestQueue.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
