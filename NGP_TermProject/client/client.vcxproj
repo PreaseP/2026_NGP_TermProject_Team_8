@@ -130,4 +130,9 @@
 <ItemDefinitionGroup Condition="'$(Platform)'=='x64'"><ClCompile><AdditionalIncludeDirectories>$(ProjectDir)..\external\compat\include;$(OpenGLRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile><Link><AdditionalOptions></AdditionalOptions><AdditionalLibraryDirectories>$(OpenGLRoot)$(OpenGLConfigDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories><AdditionalDependencies>$(GlewLibrary);$(FreeglutLibrary);opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
 <Target Name="CopyGameRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'"><ItemGroup><GameRuntime Include="$(OpenGLRoot)$(OpenGLConfigDir)bin\*.dll;$(ProjectDir)*.png;$(ProjectDir)*.glsl" /></ItemGroup><Copy SourceFiles="@(GameRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" /></Target>
 <ItemGroup><None Include="cgproj.cpp" /><Image Include="*.png" /></ItemGroup>
+<ItemGroup>
+  <ClCompile Include="NetworkClient.cpp" />
+  <ClInclude Include="NetworkClient.h" />
+  <ClInclude Include="..\common\protocol.h" />
+</ItemGroup>
 <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" /><ImportGroup Label="ExtensionTargets" /></Project>

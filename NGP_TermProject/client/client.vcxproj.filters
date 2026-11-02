@@ -34,4 +34,7 @@
 <None Include="vertex.glsl"><Filter>Assets</Filter></None>
 <None Include="cgproj.cpp"><Filter>Source</Filter></None>
 <Image Include="*.png"><Filter>Assets</Filter></Image>
+<ClCompile Include="NetworkClient.cpp"><Filter>Source</Filter></ClCompile>
+<ClInclude Include="NetworkClient.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="..\common\protocol.h"><Filter>Headers</Filter></ClInclude>
 </ItemGroup></Project>
