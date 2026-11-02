@@ -1,17 +1,37 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <ItemGroup>
-    <Filter Include="소스 파일">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="헤더 파일">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="리소스 파일">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
-  </ItemGroup>
-</Project>
+<?xml version="1.0" encoding="utf-8"?><Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003"><ItemGroup><Filter Include="Source"/><Filter Include="Headers"/><Filter Include="Assets"/></ItemGroup><ItemGroup>
+<ClCompile Include="Alex_Camera.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Block.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Camera.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="finish.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="KeyManager.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Light.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Main.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Ground.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Map.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Snow.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Snowball.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Steve_Camera.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="title.cpp"><Filter>Source</Filter></ClCompile>
+<ClCompile Include="Wall.cpp"><Filter>Source</Filter></ClCompile>
+<ClInclude Include="Alex.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Alex_Camera.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Block.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Camera.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Character.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="finish.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Ground.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="KeyManager.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Light.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Map.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Snow.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Snowball.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="stb_image.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Steve.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Steve_Camera.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="title.h"><Filter>Headers</Filter></ClInclude>
+<ClInclude Include="Wall.h"><Filter>Headers</Filter></ClInclude>
+<None Include="fragment.glsl"><Filter>Assets</Filter></None>
+<None Include="vertex.glsl"><Filter>Assets</Filter></None>
+<None Include="cgproj.cpp"><Filter>Source</Filter></None>
+<Image Include="*.png"><Filter>Assets</Filter></Image>
+</ItemGroup></Project>
