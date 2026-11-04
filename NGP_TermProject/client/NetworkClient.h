@@ -9,7 +9,11 @@
 #endif
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <vector> // [11.3] 보낼 바이트를 저장할 송신 버퍼
 #include "../common/protocol.h"
+
+// [11.3] 송수신 결과. 정상 / 지금은 처리 불가 / 연결 없음·종료 / 오류
+enum NET_RESULT { NET_OK, NET_WOULD_BLOCK, NET_CLOSED, NET_ERROR };
 
 // [11.2] 서버 연결을 담당한다. 송수신 기능은 11/3 일정에서 추가한다.
 class NetworkClient {
@@ -21,10 +25,13 @@ public:
     bool InitNetwork();
     bool ConnectToServer(const char* ip, unsigned short port = SERVER_PORT);
     bool IsConnected() const;
+    bool QueuePacket(const void* packet); // [11.3] 패킷을 송신 버퍼 뒤에 복사
+    NET_RESULT FlushSendBuffer(); // [11.3] 기존 송신 버퍼의 데이터를 실제로 보낸다.
     void Disconnect();
     void Shutdown();
 
 private:
     SOCKET sock = INVALID_SOCKET; // INVALID_SOCKET이면 소유한 연결이 없다.
     bool initialized = false;    // WSAStartup 성공 여부. 성공한 횟수에 맞춰 WSACleanup한다.
+    std::vector<unsigned char> sendBuffer; // [11.3] 아직 보내지 않은 바이트
 };

@@ -58,3 +58,25 @@
 - 임시 loopback 검증 PASS: 초기화 전 연결 거절, 잘못된 IPv4 거절, TCP 연결, 연결 중 중복 요청 시 기존 연결 유지, 해제 후 재접속, 연결 거부 시 소켓 정리, WSAStartup/WSACleanup 참조 횟수 균형, Shutdown 후 재초기화. 테스트 파일/실행 파일은 `%TEMP%/NGP-network-1102-smoke`에만 있으며 게임 프로젝트에는 추가하지 않았다.
 - 실제 팀 서버 접속/로그인과 UI 연결은 미검증이다. 최초 blocking connect는 OS 연결 타임아웃까지 기다릴 수 있다(설계서 절차 유지).
 - 다음 일정(11/3): QueuePacket / FlushSendBuffer / ReceiveData. 사용자가 요청할 때 진행한다. 사용자 요청으로 이 단계의 변경을 커밋·푸시한다.
+
+## 11/3 첫 단계: sendBuffer와 QueuePacket만 추가
+
+- 사용자 요청: 한꺼번에 세 함수를 구현하지 않고, 각 단계를 설명하며 진행한다. 현재 승인 범위는 송신 버퍼와 QueuePacket까지다.
+- NetworkClient.h에 vector include, `std::vector<unsigned char> sendBuffer`, `bool QueuePacket(const void* packet)` 선언을 추가했다.
+- NetworkClient.cpp의 QueuePacket은 연결 여부/null 확인 → 첫 바이트의 전체 길이 확인(최소 PacketHeader 크기) → sendBuffer 뒤에 해당 바이트를 복사 → 성공 반환 순서다. size가 1바이트이므로 최대 255다. 호출자는 size만큼 유효한 패킷 메모리를 전달해야 한다.
+- Disconnect는 연결 소켓 정리 후 sendBuffer도 비운다. 이전 연결의 미전송 요청을 다음 연결로 넘기지 않도록 한 것이다.
+- 새 부분은 `[11.3]` 표시를 달았다. 기존 사용자 주석은 수정하지 않았다. 게임 소스, 프로젝트 설정, 프로토콜은 이번 단계에서 수정하지 않았다.
+- 검증: 기존 client Debug x64 MSBuild 성공. 아직 QueuePacket을 호출하는 실행 테스트나 실제 송신은 하지 않았다. FlushSendBuffer와 ReceiveData는 미구현이다.
+- 다음 설명 대상: QueuePacket의 첫 바이트(size), 포인터 변환, vector::insert로 범위를 복사하는 과정. 이후 사용자 요청에 따라 FlushSendBuffer로 진행한다.
+
+## 11/3 두 번째 단계: FlushSendBuffer 추가
+
+- 사용자와 QueuePacket은 완성된 패킷을 바이트 벡터에 복사만 하고, TCP 수신 쪽은 size로 패킷 경계를 복원한다는 점을 확인했다. 이후 FlushSendBuffer만 추가하도록 요청받았다.
+- NetworkClient.h에 NET_RESULT(정상/일시 불가/종료/오류)와 FlushSendBuffer 선언을 추가했다. 공용 protocol.h는 변경하지 않았다.
+- NetworkClient.cpp에서 기존 sendBuffer를 send()에 전달한다. 별도 송신 버퍼는 추가하지 않았다. send 길이는 int 범위 안에서 전달한다.
+- 양수 반환 시 처리된 앞부분만 erase하고 남은 데이터를 반복해서 시도한다. WSAEWOULDBLOCK은 남은 바이트를 유지한 채 NET_WOULD_BLOCK으로 반환한다. 0은 NET_CLOSED, 다른 소켓 오류는 NET_ERROR다. 버퍼가 모두 비면 NET_OK다.
+- 오류/종료에 따른 Disconnect 호출은 추후 호출자인 GameClient에서 판단한다. 이 함수는 바이트 송신과 결과 반환만 맡는다.
+- 검증: 기존 client Debug x64 MSBuild 성공. 임시 테스트 `%TEMP%/NGP-network-1103-flush` 실행 PASS.
+- 실제 loopback 소켓으로 패킷 두 개의 바이트·순서 일치, QueuePacket 직후 아직 미송신, 빈 버퍼 재호출 시 send 미호출을 확인했다.
+- 부분 송신과 WSAEWOULDBLOCK은 테스트에서 send 결과를 모의하여 검증했다. 첫 2바이트 처리 뒤 일시 불가 → 다음 호출에서 남은 바이트만 보내며 중복/유실이 없음을 확인했다. 0/오류 반환과 해제 후 재접속 시 이전 요청 제거도 확인했다. 프로덕션 코드에 테스트용 장치는 추가하지 않았다.
+- 기존 게임 코드와 사용자 주석은 수정하지 않았다. ReceiveData, recvBuffer, ExtractPacket, GameClient·Main 연결은 아직 구현하지 않았다. 커밋·푸시는 사용자 요청 시 진행한다.

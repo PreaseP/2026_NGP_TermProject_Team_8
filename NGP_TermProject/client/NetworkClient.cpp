@@ -1,5 +1,7 @@
 ﻿#include "NetworkClient.h"
 #include <iostream>
+#include <algorithm>
+#include <limits>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -80,12 +82,59 @@ bool NetworkClient::IsConnected() const
     return sock != INVALID_SOCKET;
 }
 
+// [11.3] 패킷을 저장만 한다. 실제 send()는 다음에 만들 FlushSendBuffer가 담당한다.
+// 호출자는 첫 바이트(size)만큼 유효한 protocol.h 패킷을 전달한다.
+bool NetworkClient::QueuePacket(const void* packet)
+{
+    if (!IsConnected() || packet == nullptr) return false;
+
+    // 바이트 단위로 읽기 위해 포인터를 변환한다. 첫 바이트가 헤더 포함 전체 길이다.
+    const unsigned char* bytes = static_cast<const unsigned char*>(packet);
+    const unsigned char packetSize = bytes[0];
+    if (packetSize < sizeof(PacketHeader)) return false;
+    // packetSize가 1바이트이므로 최대 255까지 표현된다.
+
+    sendBuffer.insert(sendBuffer.end(), bytes, bytes + packetSize);
+    return true;
+}
+
+// [11.3] QueuePacket에 저장되어있는 패킷들(sendBuffer)를 send()에 넘긴다.
+NET_RESULT NetworkClient::FlushSendBuffer()
+{
+    if (!IsConnected()) return NET_CLOSED;
+
+    while (!sendBuffer.empty()) {
+        //목적은 send()가 요구하는 int 타입으로 바이트 수를 맞추는 것
+        const std::size_t maxSendSize = std::numeric_limits<int>::max(); // 32비트 int의 최댓값은 2,147,483,647
+        const int sendSize = static_cast<int>(std::min(sendBuffer.size(), maxSendSize));
+        const int sent = send(sock, reinterpret_cast<const char*>(sendBuffer.data()), sendSize, 0);
+
+        if (sent == SOCKET_ERROR) {
+            const int error = WSAGetLastError();
+            //송신할 여유가 부족하면 send()가 SOCKET_ERROR를 반환하고 오류 코드가 WSAEWOULDBLOCK이 될 수 있다.
+            // 지금 보낼 수 없으면 남은 데이터를 그대로 두고 다음 호출에서 다시 시도한다.
+            if (error == WSAEWOULDBLOCK) return NET_WOULD_BLOCK;
+
+            std::cerr << "send failed: " << error << std::endl;
+            return NET_ERROR;
+        }
+        if (sent == 0) return NET_CLOSED;
+
+        // 일부만 처리됐다면 그 부분만 지운다. 나머지는 반복해서 전송을 시도한다.
+        sendBuffer.erase(sendBuffer.begin(), sendBuffer.begin() + sent); // 처음부터 sent 직전까지
+    }
+
+    return NET_OK;
+}
+
 // [11.2] 서버 연결만 끊는다. Winsock은 유지하므로 다시 연결할 수 있다.
 void NetworkClient::Disconnect()
 {
-    if (sock == INVALID_SOCKET) return;
-    closesocket(sock);
-    sock = INVALID_SOCKET;
+    if (sock != INVALID_SOCKET) {
+        closesocket(sock);
+        sock = INVALID_SOCKET;
+    }
+    sendBuffer.clear(); // [11.3] 이전 연결의 미전송 요청을 다음 연결에 남기지 않는다.
 }
 
 // [11.2] 연결을 끊고 Windows 소켓 사용을 마무리한다.
