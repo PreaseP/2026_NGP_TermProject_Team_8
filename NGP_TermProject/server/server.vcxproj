@@ -130,8 +130,10 @@
   <ItemGroup>
     <ClInclude Include="..\common\Common.h" />
     <ClInclude Include="..\common\Inventory.h" />
+    <ClInclude Include="GameSession.h" />
     <ClInclude Include="SendRequestQueue.h" />
     <ClCompile Include="..\common\Inventory.cpp" />
+    <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="SendRequestQueue.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

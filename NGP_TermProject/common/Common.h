@@ -1,6 +1,7 @@
 #pragma once
 
 constexpr int MAX_ITEMS = 2;
+constexpr int MAX_NAME_LEN = 16;
 constexpr int BUF_SIZE = 256;
 constexpr int INVALID_ID = -1;
 
