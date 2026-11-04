@@ -135,6 +135,7 @@ void NetworkClient::Disconnect()
         sock = INVALID_SOCKET;
     }
     sendBuffer.clear(); // [11.3] 이전 연결의 미전송 요청을 다음 연결에 남기지 않는다.
+    recvBuffer.clear(); // [11.3] 이전 연결의 수신 바이트를 다음 연결에 남기지 않는다.
 }
 
 // [11.2] 연결을 끊고 Windows 소켓 사용을 마무리한다.
@@ -145,5 +146,37 @@ void NetworkClient::Shutdown()
     if (initialized) {
         WSACleanup();
         initialized = false;
+    }
+}
+
+// [11.3] 서버에서 도착한 데이터를 읽어서, 나중에 사용할 수 있도록 recvBuffer에 모아 두는 함수
+NET_RESULT NetworkClient::ReceiveData()
+{
+    if (!IsConnected()) return NET_CLOSED;
+
+    unsigned char buffer[4096];
+    bool receivedAny = false; //이번 호출에서 데이터를 받았는지 기록한다.
+
+    while (true) { //지금 받을 데이터가 없을 때까지 반복한다.
+        const int received = recv(sock, reinterpret_cast<char*>(buffer), static_cast<int>(sizeof(buffer)), 0);
+
+        if (received == SOCKET_ERROR) {
+            const int error = WSAGetLastError();
+            //도착한 데이터가 없으면 기다리지 않고 돌아간다.
+            if (error == WSAEWOULDBLOCK) {
+                if (receivedAny) {
+                    return NET_OK;
+                }
+                return NET_WOULD_BLOCK;
+            }
+
+            std::cerr << "recv failed: " << error << std::endl;
+            return NET_ERROR;
+        }
+        if (received == 0) return NET_CLOSED; //서버의 정상적인 연결 종료
+
+        //실제로 받은 바이트만 기존 수신 데이터 뒤에 붙인다.
+        recvBuffer.insert(recvBuffer.end(), buffer, buffer + received);
+        receivedAny = true;
     }
 }

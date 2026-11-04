@@ -1,6 +1,6 @@
 # 현재 상태: 기존 게임 이식 단계
 
-현재 진행: 기존 게임 이식과 10/31 초기화·종료 준비 이후, 아래의 **11/2 NetworkClient 연결 수명 관리**까지 구현했다. 이후 기능은 일정 순서대로 진행한다.
+현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**까지 구현했다. 패킷 추출과 GameClient·Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
 
 2026-11-02 사용자 요청으로 앞서 작성한 네트워크 구현을 되돌렸다. 사용자는 과정을 이해하며 단계별로 함께 작업하기를 원한다. 현재 범위 이후로 임의 진행하지 않는다.
 
@@ -14,7 +14,7 @@
 - 백업: `C:/Users/user/AppData/Local/Temp/NGP-client-network-backup-20261102-204413`. 이전 진행 문서도 포함되어 있다. 사용자 지시 없이 복원하거나 네트워크 구현을 다시 진행하지 않는다.
 - 실제 게임 화면 실행 확인은 아직 하지 않았다. 이전 네트워크 버전의 빌드·테스트 결과는 현재 원본 이식 단계의 검증 결과로 사용하지 않는다.
 
-다음 단계는 사용자가 요청할 때 기존 Main.cpp의 흐름과 역할부터 함께 살펴보는 것이다.
+현재 설명 대상은 `ReceiveData()`의 문법과 수신 버퍼 누적 흐름이다. 아래에는 이전 단계부터의 작업 이력을 남긴다.
 
 검증: 원본 이식 상태의 Debug x64 MSBuild 빌드 성공. 원본 코드의 형변환 경고는 유지했다. 게임 창 실행·플레이 확인은 하지 않았다. 이전 네트워크 Release 실행 파일은 혼동을 피하도록 백업 폴더로 옮겼다.
 
@@ -80,3 +80,46 @@
 - 실제 loopback 소켓으로 패킷 두 개의 바이트·순서 일치, QueuePacket 직후 아직 미송신, 빈 버퍼 재호출 시 send 미호출을 확인했다.
 - 부분 송신과 WSAEWOULDBLOCK은 테스트에서 send 결과를 모의하여 검증했다. 첫 2바이트 처리 뒤 일시 불가 → 다음 호출에서 남은 바이트만 보내며 중복/유실이 없음을 확인했다. 0/오류 반환과 해제 후 재접속 시 이전 요청 제거도 확인했다. 프로덕션 코드에 테스트용 장치는 추가하지 않았다.
 - 기존 게임 코드와 사용자 주석은 수정하지 않았다. ReceiveData, recvBuffer, ExtractPacket, GameClient·Main 연결은 아직 구현하지 않았다. 커밋·푸시는 사용자 요청 시 진행한다.
+
+## 11/3 세 번째 단계: ReceiveData 추가
+
+- 사용자가 FlushSendBuffer 설명을 이해한 뒤, 수신 단계의 목적과 변경 파일 설명을 듣고 ReceiveData 구현을 요청했다. 이번 승인 범위는 수신 바이트 누적까지다.
+- NetworkClient.h에 `NET_RESULT ReceiveData()`와 `std::vector<unsigned char> recvBuffer`를 추가했다. 기존 코드 주석은 보존하고 새 부분에 `[11.3]` 표시를 사용했다.
+- ReceiveData는 연결 확인 후 4096바이트 임시 배열로 recv를 한 번 호출한다. 양수 반환이면 실제 받은 바이트만 recvBuffer 뒤에 복사하고 NET_OK를 반환한다. 한 번에 모두 읽지 못한 데이터는 다음 호출에서 이어 받는다.
+- WSAEWOULDBLOCK은 NET_WOULD_BLOCK, 0은 서버의 정상 종료를 나타내는 NET_CLOSED, 다른 소켓 오류는 NET_ERROR다. 기존 수신 바이트는 이 결과들로 삭제하지 않는다. 연결 종료와 오류에 대한 Disconnect 판단은 이후 호출자가 맡는다.
+- Disconnect에 recvBuffer.clear()를 추가해 재접속 시 이전 연결의 바이트가 섞이지 않게 했다. Shutdown도 Disconnect를 통해 두 버퍼를 비운다.
+- 검증: 기존 client Debug x64 MSBuild 빌드 성공. 임시 테스트 `%TEMP%/NGP-network-1103-receive` 컴파일·실행 PASS. Windows SDK 접근 제한으로 빌드와 테스트 실행은 권한 승인 후 수행했다.
+- 실제 loopback 소켓으로 미연결 결과, 데이터 없는 상태의 WSAEWOULDBLOCK, 패킷 일부 보관 후 나머지와 다음 패킷 바이트 누적, 0/128/255를 포함한 바이트 순서, 10000바이트를 여러 호출로 수신할 때의 무손실 누적, 서버 정상 종료 시 기존 바이트 보존, 해제·재접속 시 수신 버퍼 초기화, Shutdown 정리를 확인했다. 소켓을 테스트에서 무효화하여 일반 recv 오류 반환과 기존 바이트 보존도 확인했다.
+- 테스트의 버퍼 확인 장치는 임시 테스트 파일에만 두었고 게임 프로젝트에는 추가하지 않았다. ExtractPacket, GameClient·Main 연결은 구현하지 않았다. 실제 팀 서버·게임 UI 통합은 미검증이다. 커밋·푸시는 하지 않았다.
+- 다음 설명 대상: 임시 배열과 recvBuffer의 차이, recv 반환값, 실제 받은 길이만 vector::insert로 누적하는 문법. 이후 구현은 사용자 요청에 맞춰 진행한다.
+
+### 기존 주석 보존 재확인
+
+- 사용자가 기존 주석을 건드리지 말고 다시 작업하도록 요청했다. ReceiveData 추가 직전에 확인한 기존 코드 주석은 현재도 유지되어 있으며, 이전부터 있던 사용자 수정은 되돌리지 않았다.
+- 새 ReceiveData 구현 블록을 NetworkClient.cpp 맨 아래로 옮겼다. 이동한 블록 외 기존 코드와 주석은 이동 전후 바이트가 동일함을 확인했다. 함수 내용과 동작은 변경하지 않았다.
+
+### ReceiveData 본문만 다시 추가
+- 사용자가 저장한 최신 FlushSendBuffer 주석을 기준으로 NetworkClient.cpp 끝에 ReceiveData 본문만 추가했다. 추가 전 파일 전체가 추가 후에도 바이트 단위로 그대로 유지됨을 확인했다. 헤더와 Disconnect 등 기존 함수는 수정하지 않았다.
+- 이번 요청에서는 Disconnect의 recvBuffer 초기화를 추가하지 않았다. 앞선 기록의 버퍼 초기화 검증은 이전 구현에 대한 기록이다. 현재 변경은 Debug x64 MSBuild 빌드 성공으로 확인했다.
+
+### 11/3 범위 코드 검토
+- 사용자 요청으로 현재 NetworkClient.h/.cpp를 추진계획서와 LLD에 대조했다. QueuePacket / FlushSendBuffer / ReceiveData 선언·정의와 두 버퍼는 모두 존재한다. ExtractPacket은 11/4 범위다.
+- 발견 1: Disconnect는 sendBuffer만 비우고 recvBuffer를 비우지 않는다. 이전 연결의 수신 바이트가 재접속 후에도 남을 수 있다. 현재 코드로 기존 임시 loopback 테스트를 다시 컴파일·실행해 "FAIL: disconnect clears receive buffer"를 재현했다. 이 검사 이전의 부분 수신, 바이트 누적·순서, 여러 호출 수신, 정상 종료 시 보존 검사는 통과했다.
+- 발견 2: LLD는 ReceiveData를 WSAEWOULDBLOCK까지 반복 수신하도록 설명하지만 현재는 recv 한 번 후 NET_OK를 반환한다. 데이터는 다음 호출로 이어 받을 수 있으나 설계와 차이가 있다.
+- 이전 범위 추가 확인: ConnectToServer의 TCP_NODELAY 설정이 현재 없다. LLD의 연결 절차와 다르며, 사용자가 이전에 수정한 영역이므로 임의 복원하지 않았다.
+- 검증: 현재 client Debug x64 MSBuild 성공. 이번 검토에서는 소스 코드와 기존 주석을 수정하지 않았고 검토 결과만 문서 끝에 기록했다.
+
+### 검토 항목 1 수정: 연결 종료 시 수신 버퍼 초기화
+- 사용자 요청으로 Disconnect에 recvBuffer.clear() 한 줄만 추가했다. 추가한 줄을 제외한 기존 소스 전체가 바이트 단위로 동일함을 확인했고 기존 주석은 수정하지 않았다.
+- 현재 소스를 포함한 임시 수신 테스트를 다시 컴파일·실행해 PASS를 확인했다. 이전에 실패한 연결 종료 후 수신 버퍼 초기화와 재접속 시 이전 바이트 제거 검사도 통과했다.
+- ReceiveData의 반복 수신 방식과 TCP_NODELAY 설정은 변경하지 않았다. 반복 수신과 한 번 수신의 차이는 사용자에게 설명하는 단계다.
+
+### ReceiveData를 반복 수신으로 변경
+- 사용자 요청으로 ReceiveData 내부에 while 반복문을 추가해 WSAEWOULDBLOCK이 나올 때까지 수신 바이트를 recvBuffer에 누적한다. 기존 주석 문구는 보존했고 다른 함수와 헤더는 수정하지 않았다.
+- receivedAny로 이번 호출의 수신 여부를 기록한다. WSAEWOULDBLOCK 시 한 번이라도 받았으면 NET_OK, 처음부터 받은 바이트가 없으면 NET_WOULD_BLOCK을 반환한다. 0과 일반 오류는 각각 NET_CLOSED / NET_ERROR를 반환하며 누적된 바이트는 유지한다.
+- 검증: client Debug x64 MSBuild 성공. 임시 loopback 테스트에서 10000바이트가 소켓에 준비된 것을 확인한 뒤 ReceiveData 한 번으로 전부 읽는지 검증했다. 2000바이트만 준비된 경우에도 4096바이트가 채워질 때까지 기다리지 않고 반환함을 확인했다. 빈 수신, 분할 데이터 누적·순서, 정상 종료, 오류, 재접속·Shutdown 버퍼 정리 검사도 PASS다.
+
+- 사용자 요청으로 ReceiveData의 WSAEWOULDBLOCK 처리에서 삼항 연산자를 if문으로 변경했다. 기존 주석과 반환 동작은 유지했다.
+
+### 11/3 송신·수신 기능 커밋
+- 사용자 승인에 따라 송신 기능(QueuePacket / FlushSendBuffer)과 수신 기능(ReceiveData / 수신 버퍼 초기화)을 두 커밋으로 나눈다. 커밋 대상은 해당 NetworkClient 기능과 진행 기록이며, 별도로 수정된 기존 주석·연결 설정과 다른 게임 파일·문서는 작업 폴더에 유지한다. 현재 CJH 브랜치에서 origin/CJH로 푸시한다.

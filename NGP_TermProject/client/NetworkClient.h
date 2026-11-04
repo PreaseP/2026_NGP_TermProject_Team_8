@@ -27,6 +27,7 @@ public:
     bool IsConnected() const;
     bool QueuePacket(const void* packet); // [11.3] 패킷을 송신 버퍼 뒤에 복사
     NET_RESULT FlushSendBuffer(); // [11.3] 기존 송신 버퍼의 데이터를 실제로 보낸다.
+    NET_RESULT ReceiveData(); // [11.3] 받은 바이트를 수신 버퍼 뒤에 모은다.
     void Disconnect();
     void Shutdown();
 
@@ -34,4 +35,5 @@ private:
     SOCKET sock = INVALID_SOCKET; // INVALID_SOCKET이면 소유한 연결이 없다.
     bool initialized = false;    // WSAStartup 성공 여부. 성공한 횟수에 맞춰 WSACleanup한다.
     std::vector<unsigned char> sendBuffer; // [11.3] 아직 보내지 않은 바이트
+    std::vector<unsigned char> recvBuffer; // [11.3] 패킷 추출 전까지 보관할 수신 바이트
 };
