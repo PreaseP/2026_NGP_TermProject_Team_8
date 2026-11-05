@@ -180,3 +180,23 @@ NET_RESULT NetworkClient::ReceiveData()
         receivedAny = true;
     }
 }
+
+// [11.4] recvBuffer에 모아 둔 데이터에서 끝까지 도착한 패킷 하나를 꺼낸다
+// out은 꺼낸 패킷을 담아 줄 배열의 주소.
+NET_RESULT NetworkClient::ExtractPacket(unsigned char* out)
+{
+    if (out == nullptr) return NET_ERROR;
+    if (recvBuffer.empty()) return NET_WOULD_BLOCK;
+
+    const unsigned char packetSize = recvBuffer[0];
+    // 패킷에는 size와 type이 꼭 있어야 하므로 길이가 2바이트보다 작으면 오류다.
+    if (packetSize < sizeof(PacketHeader)) return NET_ERROR;
+
+    // 전체 길이만큼 도착하지 않았다면 지우지 않고 다음 데이터를 기다린다.
+    if (recvBuffer.size() < packetSize) return NET_WOULD_BLOCK;
+
+    // 맨 앞에서 패킷 길이만큼만 out으로 복사, 후 지움
+    std::copy_n(recvBuffer.begin(), packetSize, out);
+    recvBuffer.erase(recvBuffer.begin(), recvBuffer.begin() + packetSize);
+    return NET_OK;
+}

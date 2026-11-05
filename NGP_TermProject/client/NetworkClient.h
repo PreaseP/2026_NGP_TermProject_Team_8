@@ -28,6 +28,9 @@ public:
     bool QueuePacket(const void* packet); // [11.3] 패킷을 송신 버퍼 뒤에 복사
     NET_RESULT FlushSendBuffer(); // [11.3] 기존 송신 버퍼의 데이터를 실제로 보낸다.
     NET_RESULT ReceiveData(); // [11.3] 받은 바이트를 수신 버퍼 뒤에 모은다.
+   
+    // NET_OK: 하나 꺼냈음 / NET_WOULD_BLOCK: 데이터가 부족함 / NET_ERROR: out이 없거나 패킷 길이가 잘못됨
+    NET_RESULT ExtractPacket(unsigned char* out);
     void Disconnect();
     void Shutdown();
 

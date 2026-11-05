@@ -1,6 +1,6 @@
 # 현재 상태: 기존 게임 이식 단계
 
-현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**까지 구현했다. 패킷 추출과 GameClient·Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
+현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**와 **11/4 ExtractPacket**까지 구현했다. GameClient·Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
 
 2026-11-02 사용자 요청으로 앞서 작성한 네트워크 구현을 되돌렸다. 사용자는 과정을 이해하며 단계별로 함께 작업하기를 원한다. 현재 범위 이후로 임의 진행하지 않는다.
 
@@ -123,3 +123,21 @@
 
 ### 11/3 송신·수신 기능 커밋
 - 사용자 승인에 따라 송신 기능(QueuePacket / FlushSendBuffer)과 수신 기능(ReceiveData / 수신 버퍼 초기화)을 두 커밋으로 나눈다. 커밋 대상은 해당 NetworkClient 기능과 진행 기록이며, 별도로 수정된 기존 주석·연결 설정과 다른 게임 파일·문서는 작업 폴더에 유지한다. 현재 CJH 브랜치에서 origin/CJH로 푸시한다.
+
+
+### 11/4 첫 단계 ExtractPacket 구현
+
+- 사용자 요청으로 client/NetworkClient.h/.cpp에 `NET_RESULT ExtractPacket(unsigned char* out)` 선언과 정의를 추가했다. 추진계획서의 함수 형태를 따르고 새 코드에는 [11.4] 표시를 사용했다. 기존 함수와 사용자 주석은 보존했다.
+- 호출자는 `unsigned char packet[BUF_SIZE]`처럼 BUF_SIZE(256) 이상인 출력 배열을 전달한다. 첫 바이트 size가 PacketHeader 크기(2) 이상인지 확인하고, size만큼 수신됐다면 해당 바이트만 출력 배열에 복사한 뒤 recvBuffer에서 제거한다. 여러 패킷은 반복 호출로 하나씩 꺼낸다.
+- NET_OK는 추출 성공, NET_WOULD_BLOCK은 빈 버퍼 또는 패킷 수신 부족, NET_ERROR는 null 출력 포인터 또는 잘못된 길이(0/1)다. 성공한 경우에만 버퍼와 출력을 변경한다. 길이 오류를 받은 호출자는 이후 연결 오류 처리 단계에서 대응한다.
+- 이미 받은 바이트를 처리하므로 IsConnected 검사 없이 수신 버퍼를 확인한다. 패킷 type별 구조체 크기 검사와 게임 처리는 이후 GameClient 단계에서 담당한다.
+- 검증: 실제 NetworkClient.cpp를 함께 컴파일한 임시 C++ 테스트 PASS. 길이 2/7/255의 모든 분할 위치, 빈 입력, 헤더 일부, 여러 패킷과 뒤쪽 미완성 패킷, 출력 범위 및 원본 바이트 일치, 잘못된 길이, null 출력, 연결 소켓 없이 보관된 패킷 추출을 확인했다. 버퍼 접근 장치는 임시 테스트에만 있으며 프로젝트에는 추가하지 않았다.
+- 테스트 위치: %TEMP%/NGP-network-1104-extract-vuhumiuo. 임시 파일 생성·컴파일·실행은 샌드박스 권한 승인 후 수행했다.
+- 전체 client Debug x64 MSBuild는 현재 체크아웃에 external/vcpkg_installed/x64-windows가 없어 GLM/freeglut 헤더를 찾지 못해 실패했다. NetworkClient.cpp 컴파일과 별도 테스트의 컴파일·링크·실행은 성공했다. 게임 실행 및 실제 팀 서버 연동은 이번 검증에 포함하지 않았다.
+- 이번 구현은 ExtractPacket까지다. GameClient Init/TryConnect 및 Main 연결은 다음 사용자 요청에 맞춰 단계별로 진행한다.
+
+
+### ExtractPacket 주석을 쉬운 말로 수정
+- 사용자 요청으로 새로 추가한 ExtractPacket의 헤더와 함수 내부 주석을 쉬운 말로 바꿨다. 출력 배열, 패킷 전체 길이, 덜 받은 데이터 보관, 복사 후 꺼낸 부분만 지우는 과정을 설명했다.
+- 연결 종료 확인은 ReceiveData가 맡고 ExtractPacket은 이미 받은 데이터만 확인한다는 설명을 추가했다.
+- 주석과 공백을 제외한 두 소스 파일의 내용이 수정 전후 동일함을 확인했다. 함수 동작은 바꾸지 않았으며 주석 변경이므로 빌드와 실행 테스트는 반복하지 않았다.
