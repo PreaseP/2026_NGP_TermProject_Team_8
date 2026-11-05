@@ -9,9 +9,13 @@ enum CLIENT_STATE { CLIENT_LOGIN, CLIENT_LOBBY, CLIENT_ROOM, CLIENT_PLAYING, CLI
 class GameClient {
 public:
     bool Init(const char* ip);// 서버 IP를 저장하고 네트워크 사용을 준비한다.
-    bool TryConnect(); // [11.4] 저장한 서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
+    bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
+    void PollNetwork(); // [11.5] 쌓인 데이터를 보내고 도착한 데이터를 받는다.
 
 private:
+    // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
+    void ProcessPacket(const unsigned char* packet);
+
     CLIENT_STATE currentState = CLIENT_LOGIN;
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
