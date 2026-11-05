@@ -36,5 +36,7 @@
 <Image Include="*.png"><Filter>Assets</Filter></Image>
 <ClCompile Include="NetworkClient.cpp"><Filter>Source</Filter></ClCompile>
 <ClInclude Include="NetworkClient.h"><Filter>Headers</Filter></ClInclude>
+<ClCompile Include="GameClient.cpp"><Filter>Source</Filter></ClCompile>
+<ClInclude Include="GameClient.h"><Filter>Headers</Filter></ClInclude>
 <ClInclude Include="..\common\protocol.h"><Filter>Headers</Filter></ClInclude>
 </ItemGroup></Project>

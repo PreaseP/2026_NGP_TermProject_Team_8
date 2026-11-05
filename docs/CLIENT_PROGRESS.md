@@ -1,6 +1,6 @@
 # 현재 상태: 기존 게임 이식 단계
 
-현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**와 **11/4 ExtractPacket**까지 구현했다. GameClient·Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
+현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**와 **11/4 ExtractPacket 및 GameClient::Init / TryConnect**까지 구현했다. GameClient와 Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
 
 2026-11-02 사용자 요청으로 앞서 작성한 네트워크 구현을 되돌렸다. 사용자는 과정을 이해하며 단계별로 함께 작업하기를 원한다. 현재 범위 이후로 임의 진행하지 않는다.
 
@@ -141,3 +141,27 @@
 - 사용자 요청으로 새로 추가한 ExtractPacket의 헤더와 함수 내부 주석을 쉬운 말로 바꿨다. 출력 배열, 패킷 전체 길이, 덜 받은 데이터 보관, 복사 후 꺼낸 부분만 지우는 과정을 설명했다.
 - 연결 종료 확인은 ReceiveData가 맡고 ExtractPacket은 이미 받은 데이터만 확인한다는 설명을 추가했다.
 - 주석과 공백을 제외한 두 소스 파일의 내용이 수정 전후 동일함을 확인했다. 함수 동작은 바꾸지 않았으며 주석 변경이므로 빌드와 실행 테스트는 반복하지 않았다.
+
+
+### 11/4 GameClient Init 구현
+
+- 사용자가 GameClient::Init까지만 구현하도록 요청했다. 새 client/GameClient.h/.cpp를 만들고 기존 client.vcxproj와 filters에 등록했다. 이번 단계는 [11.4] 표시와 쉬운 한국어 주석을 사용했다.
+- 추진계획서의 CLIENT_STATE 다섯 상태와 Init에 필요한 currentState, mySessionId, myRoomId, mySlot, serverIp, errorMessage, NetworkClient network만 추가했다. Inventory/InputHandler/월드 객체 등은 해당 기능 단계에서 추가한다.
+- Init(const char* ip)은 연결 중 재초기화와 null/빈 IP를 거절한다. 서버 주소 문자열을 복사하고 NetworkClient::InitNetwork로 Winsock을 준비한 뒤 CLIENT_LOGIN과 번호 -1(미정)을 설정하고 이전 오류 메시지를 지운다. 실패하면 errorMessage를 저장하고 false를 반환한다. 실제 IPv4 형식 검사는 이후 ConnectToServer에서 담당한다.
+- Init에서는 서버 연결을 시도하지 않는다. TryConnect, GameClient 종료 함수와 Main 연동은 아직 추가하지 않았으며 다음 사용자 요청에 따라 진행한다.
+- 검증: 기존 프로젝트 Debug x64의 GameClient.cpp 선택 컴파일(MSBuild ClCompile) 성공, 경고 없음. 새 파일을 UTF-8 BOM으로 저장해 한글 주석의 코드 페이지 경고를 해결했다.
+- 별도 임시 테스트 .vs/GameClientInitCheck에서 실제 GameClient.cpp와 NetworkClient.cpp를 컴파일·링크·실행해 PASS. null/빈 IP 거절, IP 문자열 복사 보관, Winsock 준비 후 미연결 상태, 초기 게임 상태, 반복 Init의 WSAStartup 중복 방지, 연결 중 재초기화 거절 및 상태 보존, WSAStartup 실패와 재시도를 검증했다. 실패 경로는 테스트에서만 WSAStartup 호출을 대체했고 성공 경로는 실제 Winsock을 사용했다.
+- 현재 GameClient::Shutdown은 이후 일정이므로 테스트 정리는 테스트에서만 network.Shutdown을 호출했다. 전체 게임 빌드는 앞서 확인한 GLM/freeglut 의존성 누락으로 이번 단계에서 반복하지 않았으며, 게임 실행과 실제 서버 접속은 미검증이다.
+- 기존 NetworkClient의 코드와 사용자 주석은 수정하지 않았다. NetworkClient.h에 이미 있던 공백 줄의 trailing whitespace도 보존했다. 커밋과 푸시는 하지 않았다.
+
+
+### 11/4 GameClient TryConnect 구현
+
+- 사용자 요청으로 GameClient.h/.cpp에 bool TryConnect() 선언과 정의를 추가했다. 새 부분은 [11.4] 표시와 쉬운 한국어 주석을 사용했으며 사용자가 수정한 Init 및 기존 멤버 주석은 보존했다.
+- 이미 연결되어 있으면 기존 소켓과 게임 상태를 유지하고 오류 메시지만 지운 뒤 true를 반환한다. 저장한 serverIp가 없으면 Init을 먼저 호출하라는 오류 메시지를 저장하고 false를 반환한다.
+- network.ConnectToServer(serverIp.c_str())로 기본 SERVER_PORT(9000)에 접속한다. 접속 실패 시 서버 IP가 포함된 오류 메시지를 저장하고 false를 반환한다. 초기화 여부와 IPv4 형식, 소켓 오류 처리는 NetworkClient가 담당한다.
+- 새 접속에 성공하면 currentState를 CLIENT_LOGIN으로 설정하고 오류 메시지를 지운 뒤 true를 반환한다. 로그인 패킷 송신은 이후 단계다. 최초 연결은 기존 ConnectToServer 설계대로 blocking connect다.
+- 검증: 기존 client 프로젝트 Debug x64의 GameClient.cpp 선택 컴파일 성공, 경고 없음.
+- .vs/GameClientConnectCheck의 임시 테스트를 실제 GameClient.cpp와 NetworkClient.cpp로 컴파일·링크·실행해 PASS. Init 전 호출, 잘못된 IPv4, 실제 loopback TCP 접속, 중복 호출 시 소켓 재사용과 상태 보존, 접속 거절 후 소켓 정리·오류 기록, 이후 재시도 성공과 오류 제거를 확인했다.
+- 테스트는 다른 서버와 충돌하지 않도록 OS가 선택한 loopback 임시 포트를 사용했다. 테스트 내부에서만 connect 호출의 목적지 포트를 바꾸고 원래 요청 포트가 SERVER_PORT인지 검사했다. 프로덕션 코드에는 테스트 장치를 추가하지 않았다.
+- 전체 게임 빌드는 앞서 확인한 GLM/freeglut 누락으로 반복하지 않았다. 실제 팀 서버와 게임 UI 연결은 미검증이다. Main, PollNetwork, Tick, 로그인 처리, GameClient 종료 연결은 이번 단계에서 추가하지 않았다. 커밋과 푸시는 하지 않았다.

@@ -133,6 +133,8 @@
 <ItemGroup>
   <ClCompile Include="NetworkClient.cpp" />
   <ClInclude Include="NetworkClient.h" />
+  <ClCompile Include="GameClient.cpp" />
+  <ClInclude Include="GameClient.h" />
   <ClInclude Include="..\common\protocol.h" />
 </ItemGroup>
 <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" /><ImportGroup Label="ExtensionTargets" /></Project>
