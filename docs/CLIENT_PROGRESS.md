@@ -1,6 +1,6 @@
 # 현재 상태: 기존 게임 이식 단계
 
-현재 진행: 기존 게임 이식과 초기화·종료 준비, 11/2 NetworkClient 연결 수명 관리에 이어 **11/3 QueuePacket / FlushSendBuffer / ReceiveData**와 **11/4 ExtractPacket 및 GameClient::Init / TryConnect**까지 구현했고, **11/5 PollNetwork의 송수신·패킷 추출·전달과 ProcessPacket의 검사·종류별 분기 틀**을 추가했다. 각 Handle 함수의 게임 처리, Tick과 Main 연결은 아직 하지 않았다. 이후 기능은 사용자 요청에 따라 단계별로 진행한다.
+현재 진행: 기존 일정의 11/4 접속·송수신·패킷 추출 및 GameClient Init/TryConnect까지 완료하고, 기존 11/5 PollNetwork와 ProcessPacket 검사·분기 틀을 구현한 상태다. 11/6 ReceivePackets 통합 시도는 사용자 요청으로 롤백했다. ReceiveData와 ExtractPacket 분리 구조 및 기존 11/4 완료 코드를 유지한다. 최신 문서는 남은 작업의 계획에 참고하며 Tick·로그인·실제 게임 상태 반영은 아직 구현하지 않았다.
 
 2026-11-02 사용자 요청으로 앞서 작성한 네트워크 구현을 되돌렸다. 사용자는 과정을 이해하며 단계별로 함께 작업하기를 원한다. 현재 범위 이후로 임의 진행하지 않는다.
 
@@ -220,3 +220,146 @@
 - 커밋 제목: feat(client): 통신 처리(PollNetwork) 및 패킷 검사(ProcessPacket) 기능 구현
 - 구현 범위는 PollNetwork의 송수신·패킷 전달·오류 처리와 ProcessPacket의 서버 패킷 13종 검사·분기 틀까지다. Tick과 실제 Handle 함수, Main 연동은 남아 있다.
 - 검증은 앞서 통과한 선택 컴파일과 패킷 검사·loopback 테스트 결과를 따른다. 이후 소스 변경은 사용자 주석뿐이므로 같은 테스트를 반복하지 않았다. 전체 게임 빌드의 GLM/freeglut 의존성 누락과 팀 서버·UI 미검증 상태는 유지한다.
+
+
+### 2026-11-06 교수님 피드백 반영 설계·일정 문서 검토
+
+- 사용자 요청으로 docs/8팀_조정현_클라이언트_리팩토링_개발일정.docx와 docs/Minecraft_Snowball_Fight_LLD_함수_리팩토링_v01.docx를 읽고 현재 코드와 대조했다. 이후 구현 계획은 이 최신 문서들을 기준으로 잡는다. 현재 소스는 기존 설계로 구현한 상태이며 이번 요청에서는 코드나 사용자 문서를 수정하지 않았다.
+- 주요 통합: NetworkClient::ReceiveData + ExtractPacket -> NET_RESULT ReceivePackets(std::vector<PacketBytes>& out). PacketBytes는 std::vector<unsigned char> 별칭이다. 완성 패킷을 순서대로 반환하고 미완성 바이트를 보관하며, 종료되어도 이미 추출한 패킷은 결과로 전달한다.
+- GameClient::PollNetwork의 수신 호출·반복 분배 -> Tick(const KeyManager& keys). 새 프레임 흐름은 경과 시간 계산 -> ProcessInput -> FlushSendBuffer -> ReceivePackets -> ProcessPacket 반복 -> UpdateVisuals -> Render 요청이다. 송신 종료는 즉시 정리하고 수신 종료는 받은 패킷을 반영한 뒤 정리한다. 새 LLD의 GameClient 함수 목록에는 PollNetwork가 없다.
+- 로그인 외 요청 8종은 template<class Packet> bool QueueRequest(Packet packet)로 통합한다. RequestLogin은 닉네임 검사·재접속을 담당하므로 별도로 유지한다.
+- 단순 응답 처리 함수들은 ProcessPacket의 분기로, 오브젝트·피격·아이템 등 경기 중 응답 처리 함수들은 ApplyWorldPacket으로 합친다. HandleGameStartResult는 별도 유지한다. 이동 입력 보조 함수는 ProcessInput으로 합친다.
+- 새 동작 규칙 차이: ConnectToServer는 기존 연결을 닫고 새로 접속한다(현재 코드는 이미 연결 중이면 거절). GameClient::Init은 입력 연결과 초기 접속 시도까지 담당한다(현재는 준비만). ProcessPacket의 알 수 없는 종류는 무시한다(현재는 연결 종료). 알려진 종류의 길이 검증을 삭제하라는 내용은 새 문서에 없다.
+- 공통 선언은 common.h에 NET_RESULT, INVALID_ID(-1), NetUtil, Inventory를 두는 설계다. 현재 common에는 protocol.h만 있으므로 공통 담당 영역과의 연결 범위를 후속 구현 전에 확인해야 한다. protocol.h의 패킷 이름과 구조는 그대로 사용한다.
+- 새 일정: 11/2 접속·종료, 11/3 QueuePacket/FlushSendBuffer/ReceivePackets, 11/4 Init/TryConnect/Tick/ProcessPacket 프레임 루프, 11/5 OnKeyDown/Reset/RequestLogin, 11/6 ProcessPacket 로그인 결과·HandleDisconnect·로그인 렌더·OnExit 정리 연결, 11/7 분할 수신·연결 종료·로그인 오류 점검.
+- 이후 일정: 11/9 방 목록, 11/10~12 QueueRequest와 입장·퇴장·캐릭터·시작 요청, 11/13 경기 시작 응답, 11/16~28 이동·공격·월드 표시, 11/30~12/3 아이템·결과·복귀, 12/4 실제 서버 통합, 12/9 최종 검증·제출. 통합 전까지 테스트 응답을 사용한다.
+- 코드 정리의 첫 후보는 ReceiveData/ExtractPacket을 ReceivePackets로 통합하는 단계다. 그다음 PollNetwork 흐름을 새 Tick으로 옮기고 ProcessPacket 규칙을 맞춘 뒤 로그인 기능으로 이어간다. 사용자 이해 확인·요청 없이 구현을 시작하지 않는다.
+- 문서에서 추가로 명확히 할 부분: 새 GameClient 함수 목록에는 기존 설계의 Shutdown이 없으나 OnExit은 네트워크 자원 정리 함수를 호출하도록 되어 있다. private network의 Shutdown에 어떤 공개 경로로 연결할지는 종료 단계에서 정해야 한다.
+- 이번에는 검토 결과만 기록했다. 새 설계의 코드 구현·테스트와 문서 커밋·푸시는 하지 않았다. 새 DOCX 두 개는 현재 미추적 파일 상태다.
+
+
+### 2026-11-06 기존 구현 점검 및 최신 설계 반영 1단계 수신 통합
+
+- 사용자 요청은 기존 일정의 11/4 완료 및 11/5 진행 상태를 최신 일정에 맞춰 정리하는 것이다. 한 단계씩 이해하는 작업 방식에 따라 이번에는 ReceiveData/ExtractPacket 통합과 그 호출부만 수정했다. 새 로그인 기능은 추가하지 않았다.
+- NetworkClient.h/.cpp의 기존 두 공개 함수를 NET_RESULT ReceivePackets(std::vector<PacketBytes>& outPackets)로 합쳤다. PacketBytes는 클라이언트 헤더에 둔 std::vector<unsigned char> 별칭이며 공용 common.h가 준비되면 공통 선언과 맞춘다.
+- ReceivePackets는 호출 시작에 이전 출력 목록을 비우고, 수신 버퍼에서 완성된 패킷을 순서대로 목록에 복사한다. 덜 받은 바이트는 남겨 이어 받고, 0/1처럼 헤더보다 짧은 길이는 NET_ERROR다. 네트워크 계층은 type별 구조체 검사를 하지 않는다.
+- 이번 호출에서 바이트를 받았거나 패킷을 꺼냈으면 NET_OK, 아무것도 처리하지 못한 상태에서 WSAEWOULDBLOCK이면 NET_WOULD_BLOCK이다. 수신 종료/오류는 NET_CLOSED/NET_ERROR로 반환하되 그 전에 꺼낸 패킷 목록을 유지한다. 소켓 정리 판단은 호출자가 맡는다.
+- PollNetwork는 ReceivePackets 결과 목록을 순서대로 ProcessPacket에 전달하고 그 뒤 수신 종료·오류를 처리하도록 바꿨다. 잘못된 패킷으로 ProcessPacket에서 연결을 끊으면 그 오류 이유를 보존한다. ProcessPacket의 실제 게임 상태 반영은 여전히 미구현이다.
+- 기존 주석 문구를 모두 보존했다. 통합 전 인터페이스 설명은 과거 기록임을 표시했고 바뀐 호출에는 보충 주석을 붙였다. NetworkClient/GameClient 네 파일의 기존 주석이 빠지지 않았음을 비교 검사했다. protocol.h, server와 원본 게임은 수정하지 않았다.
+- 검증: 기존 프로젝트 Debug x64의 NetworkClient.cpp 및 GameClient.cpp 선택 컴파일 성공, 경고 없음. .vs/ReceivePacketsRefactor의 독립 수신 테스트와 GameClient 연계 테스트 컴파일·실행 PASS.
+- 수신 테스트는 길이 2/7/255의 모든 분할 위치, 여러 패킷과 미완성 꼬리, 이전 출력 초기화, 종료·오류 전 패킷 보존, 잘못된 길이, 기존 버퍼의 완성 패킷, 실제 TCP로 4096바이트 경계를 넘는 700패킷의 순서·내용을 검증했다. 연계 테스트는 서버 패킷 13종 검사, 분할·연속 전달, 송신 backpressure, 마지막 패킷 선처리 및 오류 메시지 보존을 재검증했다.
+- 남은 설계 차이: ConnectToServer에서 기존 연결을 닫고 새 접속, Init에서 입력 대상 연결과 첫 접속 시도, ProcessPacket의 알 수 없는 종류 무시, PollNetwork 흐름의 Tick 통합이다. QueuePacket/FlushSendBuffer/Disconnect/Shutdown은 기존 핵심 구현을 재사용할 수 있다.
+- 다음 단계 후보는 ConnectToServer 재접속 동작 조정이며, 목적과 코드 차이를 설명하고 사용자 이해·요청에 맞춰 진행한다. Tick을 새 일정의 11/4에 넣었다고 해서 입력·렌더·로그인 전체를 이번 단계에 한꺼번에 추가하지 않는다.
+- 전체 게임 빌드는 기존 GLM/freeglut 의존성 누락으로 미확인이다. 사용자 수정 DOCX 두 개는 보존했고 이번 코드·기록 변경 및 새 문서의 커밋·푸시는 하지 않았다.
+
+
+### 2026-11-06 ReceivePackets 통합 롤백 및 진행 기준 재확인
+
+- 사용자 결정: 방금 적용한 수신·추출 통합 방식은 취소하고 기존 일정의 11/4까지 완료한 코드를 그대로 유지한다. 새 문서의 일정과 클라이언트 설계를 다시 읽어 남은 작업을 파악한다.
+- .vs/ReceivePacketsRefactor의 수정 직전 백업과 현재 차이를 확인한 뒤 NetworkClient.h/.cpp, GameClient.h/.cpp 네 파일을 정확히 복원했다. 복원 전 통합 버전은 .vs/ReceivePacketsRollback에 임시 보관했다. 전체 Git reset이나 기존 커밋 변경은 하지 않았다.
+- 복원 결과: ReceiveData와 ExtractPacket이 각각 선언·정의되고 PollNetwork가 두 함수를 호출하는 기존 반복 흐름으로 돌아왔다. PacketBytes 별칭과 ReceivePackets 함수, 해당 호출과 보충 주석은 이번 롤백으로 제거됐다. 통합 전에 이미 작성한 PollNetwork/ProcessPacket 검사 틀과 사용자 주석은 그대로 보존됐다.
+- 검증: 네 파일이 통합 직전 백업과 바이트 단위로 동일하고 client 소스는 현재 HEAD 대비 차이가 없음을 확인했다. NetworkClient.cpp와 GameClient.cpp 선택 컴파일 성공, 경고 없음. 기존 패킷 검사·loopback·분할 수신·마지막 패킷 선처리 회귀 테스트 PASS.
+- 수정 일정 문서와 리팩토링 LLD의 클라이언트 전체(구성·함수·요청 조건·응답 처리·콜백·프레임 흐름)를 다시 읽었다. 문서에는 여전히 ReceivePackets가 있으나, 이번 사용자 결정이 우선이며 그 통합안을 다시 자동 적용하지 않는다.
+- 또한 기존 일정의 11/4 코드 유지 결정에 따라 ConnectToServer를 기존 연결 종료 후 재접속으로 바꾸거나 Init에서 최초 접속을 시도하도록 하는 이전 제안은 현재 진행 대상으로 삼지 않는다. 해당 동작을 바꾸려면 사용자와 별도 범위를 정한다.
+- 최신 문서의 남은 흐름: Tick의 입력·통신·패킷 반영·화면 갱신 연결, 11/5 닉네임 입력·RequestLogin, 11/6 로그인 응답·오류·HandleDisconnect·로그인 화면·OnExit 연결, 11/7 접속·로그인 점검이다. 기존 진행 날짜와 새 일정의 날짜를 혼동해 완료 판정을 하지 않는다.
+- 향후 미구현 요청 함수는 RequestLogin을 별도로 두고 그 외 8종은 QueueRequest로, 기본 응답은 ProcessPacket으로, 경기 중 변경은 ApplyWorldPacket으로, 이동 입력은 ProcessInput으로 모으는 문서 방향을 참고한다. 실제 추가·통합은 한 단계씩 설명하고 사용자 요청에 따라 진행한다.
+- 기존 11/4 구현을 유지하면서 새 프레임 흐름에 연결할 때는 ReceiveData 후 ExtractPacket 반복 호출로 완성 패킷을 전달할 수 있다. Tick과 PollNetwork의 역할 정리는 별도 단계이며 이번에 구현하지 않았다.
+- 기존 11/6 수신 통합 기록과 다음 ConnectToServer 수정 제안은 이 롤백 결정으로 대체된다. 새 DOCX 두 개는 수정하지 않았고 현재 미추적 상태다. 이번 변경은 진행·학습 기준 기록만 남으며 커밋과 푸시는 요청받지 않아 수행하지 않았다.
+
+
+### 2026-11-06 클라이언트 최종 개발 일정 작성
+
+- 사용자 요청으로 원래 추진계획서 PDF, 수정 달력 일정 DOCX, 수정 LLD의 클라이언트 부분을 합쳐 docs/8팀_조정현_클라이언트_최종_개발일정.docx를 새로 만들었다. 원본 두 DOCX와 추진계획서 PDF는 수정하지 않았다.
+- 확정 조건: 기존 기록의 11/4까지 날짜와 함수 배치는 그대로 고정한다. 10/30 InitOpenGL, 10/31 입력·타이머·종료 준비, 11/2 접속·종료 다섯 함수, 11/3 QueuePacket/FlushSendBuffer/ReceiveData, 11/4 ExtractPacket 및 GameClient Init/TryConnect다.
+- 사용자는 11/5 이후의 기존 일정 배치를 전부 재구성해도 된다고 했다. 이는 이번 일정 문서 작성 범위이며 실제 11/5 소스를 삭제하거나 되돌리지는 않았다. ReceivePackets 통합은 재도입하지 않고 기존 ReceiveData/ExtractPacket 방식으로 계획했다.
+- 새 배치: 11/5 Tick/ProcessPacket과 main·타이머 흐름 연결, 11/6 닉네임 입력·RequestLogin, 11/7 로그인 결과·화면, 11/9 HandleDisconnect·OnExit·접속 점검, 11/10 로비 목록, 11/11 공통 QueueRequest와 방 입장, 11/12 퇴장·대기실, 11/13 캐릭터·시작 요청, 11/14 경기 시작 응답·방 흐름 점검이다.
+- 11/16 이후는 수정 LLD의 ProcessInput, QueueRequest, ApplyWorldPacket, UpdateVisuals를 중심으로 이동·공격·월드·아이템을 배치했다. 12/2 결과, 12/3 복귀·재접속, 12/4 실제 서버 통합, 12/5 한 판·재시작, 12/7~8 통합 디버깅, 12/9 최종 검증·제출이다. 일요일 휴식은 유지했다.
+- 형식은 기존 달력의 가로 용지, 일~토 7열, 표 색상·테두리·글꼴과 제목·역할 범례를 유지했다. 원본이 Word에서 세 쪽으로 밀리는 문제는 글자 크기를 유지한 채 제목 간격과 미래 주의 최소 행 높이를 조정해 두 쪽으로 정리했다.
+- 검증: 41개 날짜의 2026년 요일 정렬, 11/4까지 함수 목록 일치, 필요한 클라이언트 함수 포함, 허용하지 않은 ReceivePackets 및 개별 요청 함수 미등장, 원본 DOCX 해시 보존을 확인했다. ZIP의 document.xml 외 모든 부분은 바이트 단위로 보존했다.
+- Word의 읽기 전용 PDF 출력과 Windows PDF 페이지 렌더링으로 두 페이지를 확인했다. 제공된 render_docx.py는 pdf2image 의존성과 작업 런타임 로더가 없어 사용하지 못해 native Word 렌더링으로 검증했다. 최종 Word 문서만 전달하며 QA 이미지와 PDF는 .vs/FinalSchedule1106 안에 보관한다.
+- 앞으로 일정 기준은 새 최종 DOCX다. 코드와 학습 진행 상태는 이 문서 및 AGENTS.md를 함께 확인한다. 이번에는 코드 변경이나 커밋·푸시를 하지 않았다.
+
+### 2026-11-06 후속 일정 조정 및 최종 확정 — 기존 기록 보존
+
+이 절은 앞선 '클라이언트 최종 개발 일정 작성' 이후 사용자와 확정한 변경 사항이다. 앞선 기록은 당시의 이력으로 유지하며, 향후 일정은 아래 내용을 우선한다. 실제 함수 구현 상태는 코드 확인 결과와 구분한다.
+
+#### 최신 문서 위치와 변경 이유
+
+- 최종 전달본: `C:/Users/USER/Documents/ChatGPT/넷겜플/output/documents/8팀_조정현_클라이언트_개발일정_상단정리.docx`.
+- 저장소의 `docs/8팀_조정현_클라이언트_최종_개발일정.docx`는 이번 후속 수정 이전 문서다. 최신 문서를 저장소에 복사하거나 기존 DOCX를 덮어쓰지는 않았다.
+- 교수님 피드백에 맞춰 리팩토링 함수명과 구현 날짜를 연결하되, 팀원 달력처럼 간결하게 줄였다. 반복되는 통합 함수에는 로그인·방 목록·이동 등 짧은 기능 구분만 붙인다.
+- 사용자 시험기간 때문에 12월 기능 개발은 1·3·5일로 조정했다. 테스트는 격일 제한에서 제외한다. 작업 없는 날은 '휴식/시험 준비' 문구 없이 날짜만 남겼다.
+- 상단 범례는 N: NetworkClient / G: GameClient / I: InputHandler만 남긴다. 전역 함수 접두어 F는 삭제했으며 Inventory와 drawScene의 상단 설명도 삭제했다. 달력 본문의 Inventory 및 drawScene 함수는 유지한다.
+
+#### 코드·커밋 확인 결과와 계획 날짜의 차이
+
+- `65d639f`(10/31)는 솔루션과 프로젝트 파일 추가다. 사용자 본인의 키보드·타이머 콜백 신규 구현 기록으로 해석하면 안 된다.
+- `07481ee`(11/2)에 기존 게임 이식, InitOpenGL 분리, OnExit 추가·종료 정리가 포함된다. 키보드·타이머 콜백은 기존 게임 코드다.
+- 처음에는 이 커밋 날짜에 맞춰 InitOpenGL/OnExit를 11/2로 옮겼으나, 사용자가 최종적으로 두 함수를 10/31에 배치하도록 지정했다. 최종 달력은 10/30 빈칸, 10/31 InitOpenGL/OnExit다. 이는 계획 날짜 조정이며 커밋 날짜를 변경한 것이 아니다.
+- 기존 일정의 11/4까지 함수 구현은 코드에서 확인했다: InitOpenGL/OnExit, NetworkClient의 InitNetwork/ConnectToServer/IsConnected/Disconnect/Shutdown/QueuePacket/FlushSendBuffer/ReceiveData/ExtractPacket, GameClient의 Init/TryConnect.
+- 추가로 11/5 PollNetwork와 ProcessPacket의 패킷 검사·분기 틀이 구현돼 있다. 관련 최근 커밋은 `962ef27`이다. ProcessPacket은 아직 로그인·월드 상태를 실제로 갱신하지 않는다.
+- Tick, InputHandler의 새 네트워크 입력 처리, 로그인·방·인게임 반영 및 Main과의 네트워크 통합은 남은 작업이다. 함수 구현 완료와 게임 전체 연동 완료를 혼동하지 않는다. 이번 확인에서 새 빌드나 실행 테스트를 수행한 것은 아니다.
+
+#### 유지할 구조와 리팩토링 범위
+
+- ReceiveData/ExtractPacket 분리 및 PollNetwork를 유지한다. 이전 ReceivePackets 통합은 롤백 상태이며 재도입하지 않는다. Tick을 만들 때 기존 PollNetwork를 활용하는 범위를 먼저 설명하고, 두 곳에서 송수신을 중복 호출하지 않도록 한다.
+- 로그인은 RequestLogin, 나머지 요청 8종은 QueueRequest, 로그인·방·경기 종료 응답은 ProcessPacket, 객체·상태·피격·아이템 응답은 ApplyWorldPacket으로 구현한다. HandleGameStartResult와 HandleDisconnect는 별도 유지한다. 이동 입력 보조 처리는 ProcessInput으로 묶는다.
+- 변경내역 문서의 클라이언트+GLUT 함수 수는 54→32지만, 현재의 ReceiveData/ExtractPacket 분리 및 PollNetwork 유지 예외가 있으므로 이 수치를 현재 코드의 최종 함수 수로 단정하지 않는다. 이전 대화의 33개 계산은 수신 분리만 고려한 가정이었다. 두 예외를 모두 유지하고 나머지 명세가 동일하다면 설계상 34개가 되며 실제 구현 시 별도 집계가 필요하다.
+- Inventory는 공통으로 사용할 아이템 보관·추가·제거·보유 확인·초기화 자료형이다. 현재 common에는 protocol.h만 있고 Inventory/common.h 구현은 확인되지 않았다. protocol.h에는 ITEM_TYPE, MAX_ITEMS=2 및 아이템 패킷이 있다. LLD의 공통 자료형 계획을 이미 구현된 코드로 설명하지 않는다.
+- 공통이라는 뜻은 관리 규칙과 코드를 재사용한다는 의미다. 서버와 클라이언트는 각각 데이터를 가진다. 서버가 지급·사용 가능 여부를 판정하고 클라이언트는 응답을 반영한다.
+- drawScene은 Main.cpp의 기존 전역 렌더 콜백이며 glutDisplayFunc(drawScene)에 등록된다. LLD의 Render에 해당하는 실제 함수명으로 달력에 표시했다. 새로운 렌더 함수를 임의로 추가하는 계획이 아니다.
+
+#### 최종 일정 요약
+
+N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이며 완료 판정은 위 코드 확인 결과를 따른다. 전역 함수는 접두어가 없다.
+
+| 날짜 | 작업 |
+| --- | --- |
+| 10/30 | 빈칸 |
+| 10/31 | InitOpenGL, OnExit — 그래픽 초기화·종료 정리 |
+| 11/1 | 빈칸 |
+| 11/2 | N: InitNetwork, ConnectToServer, IsConnected, Disconnect, Shutdown |
+| 11/3 | N: QueuePacket, FlushSendBuffer, ReceiveData — 송수신 버퍼 |
+| 11/4 | N: ExtractPacket / G: Init, TryConnect |
+| 11/5 | G: PollNetwork, ProcessPacket — 송수신·패킷 검사 |
+| 11/6 | G: Tick, RequestLogin / I: OnKeyDown, Reset / main, TimerFunction, Keyboard, KeyboardUp — 프레임 연결·로그인 입력 |
+| 11/7 | G: ProcessPacket / drawScene — 로그인 결과 |
+| 11/8 | 빈칸 |
+| 11/9 | G: HandleDisconnect / OnExit — 접속·로그인 점검 |
+| 11/10 | G: ProcessPacket / drawScene — 방 목록 |
+| 11/11 | G: QueueRequest, ProcessPacket / I: OnKeyDown — 방 입장 |
+| 11/12 | G: QueueRequest, ProcessPacket / I: OnKeyDown / drawScene — 퇴장·대기실 |
+| 11/13 | G: QueueRequest / I: OnKeyDown — 캐릭터 선택·시작 |
+| 11/14 | G: HandleGameStartResult, ClearWorld / I: Reset — 시작 응답·방 점검 |
+| 11/15 | 빈칸 |
+| 11/16 | I: ProcessInput / G: QueueRequest / SpecialKeyboard, SpecialKeyboardUp — 이동 |
+| 11/17 | G: ApplyWorldPacket — 이동 좌표 |
+| 11/18 | G: UpdateVisuals, Tick / drawScene — 보간·화면 연결 |
+| 11/19 | G: ApplyWorldPacket, UpdateVisuals — 팔 상태 |
+| 11/20 | Mouse / I: OnMouse / G: QueueRequest — 차징·발사 |
+| 11/21 | 이동·공격 입력 테스트 |
+| 11/22 | 빈칸 |
+| 11/23 | G: ApplyWorldPacket — 눈덩이 생성 |
+| 11/24 | G: ApplyWorldPacket, UpdateVisuals — 눈덩이 이동·제거, 로컬 물리·충돌 정리 |
+| 11/25 | G: ApplyWorldPacket / drawScene — 피격·체력 |
+| 11/26 | G: ApplyWorldPacket, UpdateVisuals / drawScene — 눈 벽 |
+| 11/27 | I: OnKeyDown / G: QueueRequest / Inventory: Has — 아이템 요청 |
+| 11/28 | 인게임 표시·아이템 테스트 |
+| 11/29 | 빈칸 |
+| 11/30 | G: ApplyWorldPacket / Inventory: Add, Remove / drawScene — 아이템 획득·사용 |
+| 12/1 | G: ApplyWorldPacket / drawScene — 방어막·공격 강화 |
+| 12/2 | 빈칸 |
+| 12/3 | G: ProcessPacket / I: Reset / drawScene — 경기 결과 |
+| 12/4 | 서버 연동 테스트 |
+| 12/5 | G: ProcessPacket, ClearWorld, HandleDisconnect, TryConnect — 복귀·재접속 |
+| 12/6 | 빈칸 |
+| 12/7 | 1차 디버깅 및 테스트 |
+| 12/8 | 2차 디버깅 및 테스트 |
+| 12/9 | 최종 디버깅 및 테스트 진행 후 제출 |
+
+#### 이어서 작업할 때
+
+- 코드 구현은 사용자가 요청한 함수·단계만 진행한다. 일정에 여러 함수가 같은 날 적혀 있어도 한꺼번에 구현하지 않는다. 기존 주석과 커밋·디스코드 기록은 보존한다.
+- 이 채팅에서는 일정 DOCX를 수정하고 코드·커밋을 읽었을 뿐, 실제 게임 코드는 수정하지 않았다. 이번 인계 기록 갱신으로 구현 완료 상태가 달라지지 않는다.
+- 최신 DOCX는 내용·함수 소속·XML 수정 여부를 확인했지만 렌더러 부재로 실제 페이지 잘림은 미검증이다. 앞선 저장소 DOCX의 Word 렌더 결과를 이 최신 파일의 검증으로 대체하지 않는다.
+- MD 최신화는 기존 내용을 보존한 추가 기록 방식으로 수행한다. 코드·DOCX 원본 변경, 커밋·푸시는 이번 요청에 포함하지 않는다.
