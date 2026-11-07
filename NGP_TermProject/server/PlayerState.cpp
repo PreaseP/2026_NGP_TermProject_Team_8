@@ -8,8 +8,6 @@ void PlayerState::Reset(CHARACTER_TYPE characterType, const glm::vec3& spawn)
     armState = ARM_IDLE;
     shield = false;
     powerUp = false;
-    for (int i = 0; i < MAX_ITEMS; ++i)
-        items[i] = ITEM_NONE;
     itemCount = 0;
     ClearInput();
 }

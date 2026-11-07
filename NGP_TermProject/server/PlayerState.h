@@ -1,11 +1,11 @@
 #pragma once
+#include "../common/Common.h"
 #include <windows.h>
 #include <glm/glm.hpp>
-#include "../common/Common.h"
 
 class PlayerState {
 public:
-    CHARACTER_TYPE character = CHARACTER_STEVE;
+    CHARACTER_TYPE character = CHAR_NONE;
     glm::vec3      pos = glm::vec3(0.0f);
     int            hp = MAX_HP;
     ARM_STATE      armState = ARM_IDLE;
