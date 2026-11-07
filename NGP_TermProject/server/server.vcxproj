@@ -126,11 +126,10 @@
     <ClInclude Include="..\common\Common.h" />
     <ClInclude Include="..\common\Inventory.h" />
     <ClInclude Include="GameSession.h" />
-    <ClInclude Include="SendRequestQueue.h" />
     <ClCompile Include="..\common\Common.cpp" />
     <ClCompile Include="..\common\Inventory.cpp" />
     <ClCompile Include="GameSession.cpp" />
-    <ClCompile Include="SendRequestQueue.cpp" />
+    <ClInclude Include="ThreadQueue.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
