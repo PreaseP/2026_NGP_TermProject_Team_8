@@ -16,8 +16,7 @@ enum NET_RESULT {
 
 class NetUtil {
 public:
-	static bool SetNonBlocking(SOCKET sock);
-	static bool SetNoDelay(SOCKET sock);
+	static bool ConfigureSocket(SOCKET sock, bool noDelay);
 };
 
 enum ITEM_TYPE : unsigned char
