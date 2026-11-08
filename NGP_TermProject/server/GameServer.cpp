@@ -1,4 +1,4 @@
-#include "GameServer.h"
+﻿#include "GameServer.h"
 
 DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
 {
@@ -26,4 +26,27 @@ bool GameServer::Init(RecvEventQueue* recvQueue, SendRequestQueue* sendQueue, HA
         rooms[i].Init(i, this);
 
     return true;
+}
+
+void GameServer::ProcessRecvEvents()
+{
+    RecvEvent event;
+
+    // 한 번에 큐 용량만큼만 처리해서 방 갱신이 밀리지 않게 한다.
+    for (int i = 0; i < RECV_QUEUE_CAPACITY; ++i) {
+        if (!server.recvQueue->TryDequeue(&event))
+            break;
+
+        switch (event.kind) {
+        case RECV_EVENT_CONNECTED:
+            OnConnected(event.sessionId);
+            break;
+        case RECV_EVENT_PACKET:
+            OnPacket(event.sessionId, event.packetData, event.packetSize);
+            break;
+        case RECV_EVENT_DISCONNECTED:
+            OnDisconnected(event.sessionId);
+            break;
+        }
+    }
 }
