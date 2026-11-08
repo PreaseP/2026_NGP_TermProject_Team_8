@@ -1,0 +1,36 @@
+﻿#pragma once
+
+enum PACKET_TYPE : unsigned char {
+	C2S_LOGIN,
+	C2S_JOIN_ROOM,
+	C2S_LEAVE_ROOM,
+	C2S_SELECT_CHARACTER,
+	C2S_GAME_START,
+	C2S_MOVE,
+	C2S_CHARGE_START,
+	C2S_THROW,
+	C2S_USE_ITEM,
+
+	S2C_LOGIN_RESULT,
+	S2C_ROOM_LIST,
+	S2C_JOIN_ROOM_RESULT,
+	S2C_ROOM_INFO,
+	S2C_GAME_START_RESULT,
+	S2C_ADD_OBJECT,
+	S2C_MOVE_OBJECT,
+	S2C_REMOVE_OBJECT,
+	S2C_STATUS_CHANGE,
+	S2C_HIT,
+	S2C_ITEM_GET,
+	S2C_ITEM_USED,
+	S2C_GAME_OVER
+};
+
+#pragma pack(push, 1)
+
+struct PacketHeader {
+	unsigned char			size;
+	PACKET_TYPE				type;
+};
+
+#pragma pack(pop)

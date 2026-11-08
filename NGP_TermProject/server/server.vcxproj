@@ -123,12 +123,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="NetSession.cpp" />
     <ClInclude Include="..\common\Common.h" />
     <ClInclude Include="..\common\Inventory.h" />
+    <ClInclude Include="..\common\Protocol.h" />
     <ClInclude Include="GameSession.h" />
     <ClCompile Include="..\common\Common.cpp" />
     <ClCompile Include="..\common\Inventory.cpp" />
     <ClCompile Include="GameSession.cpp" />
+    <ClInclude Include="NetSession.h" />
     <ClInclude Include="ThreadQueue.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
