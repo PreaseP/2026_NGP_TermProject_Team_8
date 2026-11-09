@@ -15,6 +15,7 @@ void TitleScreen::initialize() {
 
     initializeBuffers();
     loadTitleTexture();
+    loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
 
     std::cout << "타이틀 화면 초기화 완료" << std::endl;
@@ -164,6 +165,7 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 }
 
 void TitleScreen::cleanup() {
+    if (fontTextureId != 0) { glDeleteTextures(1, &fontTextureId); fontTextureId = 0; } // [11.7]
     if (isInitialized) {
         if (vao != 0) {
             glDeleteVertexArrays(1, &vao);
@@ -180,4 +182,139 @@ void TitleScreen::cleanup() {
         isInitialized = false;
         textureLoaded = false;
     }
+}
+
+#include <gl/freeglut.h>
+
+#include <cmath>
+#include <cstring>
+#pragma comment(lib, "gdi32.lib") // [11.7] 글자 텍스처 생성에 사용한다.
+#include <gl/glm/gtc/matrix_transform.hpp>
+#include <algorithm>
+
+// [11.7] 기존 VAO와 셰이더를 사용해 메뉴도 사각형으로 그린다.
+void TitleScreen::drawUIQuad(GLuint shader, float x, float y, float w, float h,
+    GLuint texture, const glm::vec4& color, const glm::vec4& uv) const {
+    glm::mat4 model(1.0f);
+    model = glm::translate(model, glm::vec3(x + w / 2, y + h / 2, 0));
+    model = glm::scale(model, glm::vec3(w / 2, -h / 2, 1));
+    glUniformMatrix4fv(glGetUniformLocation(shader, "model"), 1, GL_FALSE, &model[0][0]);
+    glUniform4fv(glGetUniformLocation(shader, "uiColor"), 1, &color[0]);
+    glUniform4fv(glGetUniformLocation(shader, "uiUVRect"), 1, &uv[0]);
+    glUniform1i(glGetUniformLocation(shader, "useTexture"), texture != 0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void TitleScreen::panel(GLuint shader, float x, float y, float w, float h,
+    float r, float g, float b, float a) const {
+    drawUIQuad(shader, x, y, w, h, 0, glm::vec4(r, g, b, a));
+}
+
+// [11.7] 운영체제 글꼴로 영문·숫자 표를 한 번 만들고 GPU에 올린다.
+void TitleScreen::loadFontTexture() {
+    const int width = 384, height = 192; // 24 x 32 크기의 글자 칸, 16열 x 6행
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) return;
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* pixels = nullptr;
+    HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+    HFONT font = CreateFontA(-24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        ANSI_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
+        FIXED_PITCH, "Consolas");
+    if (!bitmap || !font) {
+        if (bitmap) DeleteObject(bitmap);
+        if (font) DeleteObject(font);
+        DeleteDC(dc); return;
+    }
+    HGDIOBJ oldBitmap = SelectObject(dc, bitmap), oldFont = SelectObject(dc, font);
+    std::memset(pixels, 0, width * height * 4);
+    SetBkMode(dc, TRANSPARENT); SetTextColor(dc, RGB(255, 255, 255));
+    for (int i = 0; i < 95; ++i) {
+        char letter = static_cast<char>(32 + i);
+        TextOutA(dc, (i % 16) * 24, (i / 16) * 32, &letter, 1);
+    }
+    GdiFlush();
+    // 배경은 투명하게, 글자는 흰색으로 저장해 셰이더에서 원하는 색을 입힌다.
+    auto* bytes = static_cast<unsigned char*>(pixels);
+    for (int i = 0; i < width * height; ++i) {
+        unsigned char alpha = bytes[i * 4];
+        bytes[i * 4] = bytes[i * 4 + 1] = bytes[i * 4 + 2] = 255;
+        bytes[i * 4 + 3] = alpha;
+    }
+    glGenTextures(1, &fontTextureId);
+    glBindTexture(GL_TEXTURE_2D, fontTextureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    SelectObject(dc, oldFont); SelectObject(dc, oldBitmap);
+    DeleteObject(font); DeleteObject(bitmap); DeleteDC(dc);
+}
+
+void TitleScreen::centeredText(GLuint shader, const std::string& text, float y,
+    float r, float g, float b, float size) const {
+    if (!fontTextureId) return;
+    const float scale = size / 24.0f;
+    float x = 600.0f - static_cast<float>(text.size()) * 14.0f * scale / 2;
+    for (unsigned char ch : text) {
+        if (ch < 32 || ch > 126) ch = '?';
+        const int index = ch - 32, column = index % 16, row = index / 16;
+        glm::vec4 uv(column / 16.0f, 1.0f - (row + 1) / 6.0f,
+                     (column + 1) / 16.0f, 1.0f - row / 6.0f);
+        drawUIQuad(shader, x, y - size, 24 * scale, 32 * scale, fontTextureId,
+            glm::vec4(r, g, b, 1), uv);
+        x += 14 * scale;
+    }
+}
+
+void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
+    // [11.7] 배경과 같은 셰이더를 사용하고, 메뉴용 투영·투명도만 설정한다.
+    const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB); glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha); glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glUseProgram(shader);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glActiveTexture(GL_TEXTURE0);
+    glm::mat4 view(1.0f), projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
+
+    if (lobby) {
+        centeredText(shader, "LOBBY", 425, 0.9f, 0.96f, 1, 24.0f);
+        centeredText(shader, std::string("Welcome, ") + name, 468, 1, 1, 1);
+        centeredText(shader, "Login successful", 510, 0.55f, 0.9f, 0.75f);
+        centeredText(shader, "Room selection is coming next.", 556, 0.75f, 0.82f, 0.87f);
+    }
+    else {
+        // [11.7] 칸에 닉네임과 깜빡이는 커서만 표시한다.
+        std::string display = name;
+        if ((glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0) display += "_";
+        centeredText(shader, display, 430, 1, 1, 1);
+        const std::string status = error.empty() ? "Press Enter to log in" : error;
+        centeredText(shader, status, 625, 1, error.empty() ? 1.0f : 0.65f, error.empty() ? 1.0f : 0.6f);
+    }
+    centeredText(shader, "ESC  -  EXIT", 658, 0.1f, 0.18f, 0.23f, 12.0f);
+    // [11.7] 다음 배경·게임 출력에는 기존 셰이더 동작을 사용한다.
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
+    glBindVertexArray(0); glBindTexture(GL_TEXTURE_2D, 0);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
 }

@@ -284,8 +284,7 @@ int main(int argc, char** argv)
 	}
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
-	std::cout << "1: 1인칭 모드로 게임 시작" << std::endl;
-	std::cout << "3: 3인칭 모드로 게임 시작" << std::endl;
+	std::cout << "닉네임 입력 후 Enter: 로그인" << std::endl; // [11.7]
 	std::cout << "ESC: 종료" << std::endl;
 
 	//--- 콜백 등록
@@ -504,10 +503,9 @@ void initializeGame() {
 
 void Keyboard(unsigned char key, int x, int y)
 {
-	// [종료 변경 5] 모든 화면의 ESC/Q를 같은 경로로 처리한다.
-	// [11.6] 로그인 중에는 Q도 닉네임에 사용한다. ESC는 항상 종료한다.
+	// [11.6]
 	if (key == 27 || ((key == 'q' || key == 'Q') && gameClient.GetState() != CLIENT_LOGIN)) {
-		// [통합 종료 3] 여기서는 종료 요청만 한다. 자원 정리는 창 닫기 콜백이 맡는다.
+		// [통합 종료 3] 여기서는 종료 요청만 한다.
 		glutLeaveMainLoop();
 		return;
 	}
@@ -518,6 +516,7 @@ void Keyboard(unsigned char key, int x, int y)
 		glutPostRedisplay();
 		return;
 	}
+	if (gameClient.GetState() == CLIENT_LOBBY) return; // [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		GameState newState = titleScreen.handleKeyInput(key);
@@ -736,6 +735,7 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void Mouse(int button, int state, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_LOBBY) return;
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}
@@ -834,6 +834,14 @@ GLvoid drawScene()
 	glUseProgram(shaderProgramID);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
+	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) {
+		titleScreen.render(shaderProgramID);
+		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
+			gameClient.GetState() == CLIENT_LOBBY);
+		glutSwapBuffers();
+		return;
+	}
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		titleScreen.render(shaderProgramID);

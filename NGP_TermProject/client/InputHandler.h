@@ -7,6 +7,7 @@ class GameClient;
 // [11.6] 입력 상태와 로그인에 사용할 닉네임을 보관한다.
 class InputHandler {
 public:
+    const char* GetName() const { return nameBuffer; } // [11.7] 화면에 입력 중인 닉네임을 보여 준다.
     // [11.6] 입력으로 만든 요청을 전달할 GameClient를 기억한다.
     explicit InputHandler(GameClient* target) : game(target) {}
     void OnKeyDown(unsigned char key); // [11.6] 로그인 화면의 닉네임 입력을 처리한다.

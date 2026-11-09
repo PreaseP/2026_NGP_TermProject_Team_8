@@ -13,9 +13,17 @@ uniform vec3 viewPos;
 uniform bool lightingEnabled;
 uniform bool useTexture;
 uniform sampler2D texture1;
+// [11.7] 메뉴에만 투명도와 색을 적용한다. 기존 게임 출력은 그대로 둔다.
+uniform bool uiMode;
+uniform vec4 uiColor;
 
 void main ()
 {
+    if (uiMode) {
+        FragColor = uiColor;
+        if (useTexture) FragColor *= texture(texture1, TexCoord);
+        return;
+    }
 	vec3 objectColor;
 	
 	if (useTexture) {

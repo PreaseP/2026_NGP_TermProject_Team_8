@@ -160,7 +160,7 @@ void GameClient::PollNetwork()
 
 }
 
-// [11.5] 이번 단계는 패킷 검사와 종류 구분까지다. 게임 상태 변경은 이후에 연결한다.
+// [11.5]패킷 검사와 종류 구분
 void GameClient::ProcessPacket(const unsigned char* packet)
 {
     // 이 함수에는 ExtractPacket으로 끝까지 꺼낸 패킷을 전달한다.
@@ -224,5 +224,26 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         return;
     }
 
-    // 종류와 길이를 확인했다. 각 Handle 함수 호출은 해당 기능을 만들 때 추가한다.
+    // 종류와 길이를 확인했다.
+    // [11.7] 로그인 성공 응답을 받은 뒤에만 로비로 이동한다.
+    if (packet[1] == S2C_LOGIN_RESULT && currentState == CLIENT_LOGIN) {
+        S2C_LoginResult result{};
+        std::memcpy(&result, packet, sizeof(result));
+        if (result.result == LOGIN_OK && result.session_id >= 0) {
+            mySessionId = result.session_id;
+            currentState = CLIENT_LOBBY;
+            inputHandler.Reset();
+            errorMessage.clear();
+        }
+        else if (result.result == LOGIN_INVALID_NAME) {
+            errorMessage = "Nickname rejected. Use 1-15 letters or numbers.";
+        }
+        else if (result.result == LOGIN_SERVER_FULL) {
+            errorMessage = "Server is full. Please try again later.";
+        }
+        else {
+            errorMessage = "Invalid login response. Please reconnect.";
+            network.Disconnect();
+        }
+    }
 }

@@ -9,6 +9,8 @@ enum CLIENT_STATE { CLIENT_LOGIN, CLIENT_LOBBY, CLIENT_ROOM, CLIENT_PLAYING, CLI
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
 class GameClient {
 public:
+    const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
+    const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
     bool Init(const char* ip);// 서버 IP를 저장하고 네트워크 사용을 준비한다.
     bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
     void Tick(); // [11.6] 주기적으로 클라이언트 처리를 진행한다.
