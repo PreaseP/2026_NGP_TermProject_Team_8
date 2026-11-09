@@ -284,7 +284,7 @@ int main(int argc, char** argv)
 	}
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
-	std::cout << "닉네임 입력 후 Enter: 로그인" << std::endl; // [11.7]
+	std::cout << "닉네임 입력 후 GAME START 클릭 또는 Enter: 로그인" << std::endl; // [11.7]
 	std::cout << "ESC: 종료" << std::endl;
 
 	//--- 콜백 등록
@@ -735,6 +735,15 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void Mouse(int button, int state, int x, int y)
 {
+	// [11.7] 버튼 클릭 로그인 요청
+	if (gameClient.GetState() == CLIENT_LOGIN) {
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
+			titleScreen.hitsStart(x, y, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))) {
+			gameClient.OnKeyDown('\r'); // 엔터키랑 같은 처리
+		}
+		glutPostRedisplay();
+		return;
+	}
 	if (gameClient.GetState() == CLIENT_LOBBY) return;
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
@@ -836,6 +845,8 @@ GLvoid drawScene()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
 	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) {
+		// [11.7] 닉네임 오류가 발생한 프레임에만 버튼 효과를 시작한다.
+		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
 		titleScreen.render(shaderProgramID);
 		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
 			gameClient.GetState() == CLIENT_LOBBY);

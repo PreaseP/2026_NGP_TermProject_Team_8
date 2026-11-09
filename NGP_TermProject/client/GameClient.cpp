@@ -30,6 +30,7 @@ bool GameClient::Init(const char* ip)
     myRoomId = -1;
     mySlot = -1;
     inputHandler.Reset(); // [11.6] 시작할 때 이전 이동·공격 입력 기록을 비운다.
+    nameErrorEffect = false; // [11.7] 이전 닉네임 오류 효과를 비운다.
     errorMessage.clear(); // 초기화에 성공했으므로 이전 오류 메시지를 지운다.
     return true;
 }
@@ -66,12 +67,14 @@ void GameClient::Tick()
 // [11.6] 로그인 성공 여부는 이후 서버 응답으로 확인한다.
 bool GameClient::RequestLogin(const char* name)
 {
+    nameErrorEffect = false; // [11.7] 이번 요청의 닉네임 검사 결과를 새로 기록한다.
     if (currentState != CLIENT_LOGIN) {
         errorMessage = "Login is only available on the login screen.";
         return false;
     }
     if (name == nullptr || name[0] == '\0') {
         errorMessage = "Enter a nickname.";
+        nameErrorEffect = true; // [11.7] 빈 닉네임도 버튼 오류 효과로 알린다.
         return false;
     }
 
@@ -83,12 +86,14 @@ bool GameClient::RequestLogin(const char* name)
               (ch >= 'a' && ch <= 'z') ||
               (ch >= '0' && ch <= '9'))) {
             errorMessage = "Use only English letters and numbers.";
+            nameErrorEffect = true; // [11.7] 허용되지 않는 글자
             return false;
         }
         ++nameLength;
     }
     if (nameLength >= MAX_NAME_LEN) {
         errorMessage = "Nickname is too long.";
+        nameErrorEffect = true; // [11.7] 닉네임 길이 초과
         return false;
     }
 
@@ -237,6 +242,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         }
         else if (result.result == LOGIN_INVALID_NAME) {
             errorMessage = "Nickname rejected. Use 1-15 letters or numbers.";
+            nameErrorEffect = true; // [11.7] 서버가 닉네임을 거절한 경우도 표시한다.
         }
         else if (result.result == LOGIN_SERVER_FULL) {
             errorMessage = "Server is full. Please try again later.";

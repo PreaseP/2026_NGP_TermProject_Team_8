@@ -15,6 +15,7 @@ void TitleScreen::initialize() {
 
     initializeBuffers();
     loadTitleTexture();
+    loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
 
@@ -55,7 +56,7 @@ void TitleScreen::loadTitleTexture() {
 
     int width = 0, height = 0, channels = 0;
     stbi_set_flip_vertically_on_load(true);
-    unsigned char* data = stbi_load("Title.png", &width, &height, &channels, 0);
+    unsigned char* data = stbi_load("TitleBackground.png", &width, &height, &channels, 0);
     if (!data) {
         std::cerr << "Title.png 로드 실패, 단색 배경으로 대체됩니다." << std::endl;
         textureLoaded = false;
@@ -166,6 +167,7 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 
 void TitleScreen::cleanup() {
     if (fontTextureId != 0) { glDeleteTextures(1, &fontTextureId); fontTextureId = 0; } // [11.7]
+    if (startTextureId != 0) { glDeleteTextures(1, &startTextureId); startTextureId = 0; } // [11.7]
     if (isInitialized) {
         if (vao != 0) {
             glDeleteVertexArrays(1, &vao);
@@ -183,6 +185,7 @@ void TitleScreen::cleanup() {
         textureLoaded = false;
     }
 }
+
 
 #include <gl/freeglut.h>
 
@@ -277,6 +280,75 @@ void TitleScreen::centeredText(GLuint shader, const std::string& text, float y,
     }
 }
 
+void TitleScreen::loadStartTexture() {
+    int w, h, channels;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load("GameStart.png", &w, &h, &channels, 4);
+    if (!pixels) return;
+    // [11.7] PNG의 투명 여백을 제외해 글자와 클릭 영역을 맞춘다.
+    int left = w, right = -1, bottom = h, top = -1;
+    for (int y = 0; y < h; ++y) for (int x = 0; x < w; ++x) {
+        if (pixels[(y * w + x) * 4 + 3] > 16) {
+            left = std::min(left, x); right = std::max(right, x);
+            bottom = std::min(bottom, y); top = std::max(top, y);
+        }
+    }
+    if (right >= left && top >= bottom) {
+        startUV[0] = static_cast<float>(left) / w;
+        startUV[1] = static_cast<float>(bottom) / h;
+        startUV[2] = static_cast<float>(right + 1) / w;
+        startUV[3] = static_cast<float>(top + 1) / h;
+        startAspect = static_cast<float>(right - left + 1) / (top - bottom + 1);
+    }
+    glGenTextures(1, &startTextureId);
+    glBindTexture(GL_TEXTURE_2D, startTextureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
+}
+
+// [11.7] 다시 실패하면 효과를 처음부터 재생한다. 크기 변화는 멈춘 지점에서 이어진다.
+void TitleScreen::PlayNameError() {
+    const int now = glutGet(GLUT_ELAPSED_TIME);
+    if (startErrorTime >= 0) startPausedTime += std::min(now - startErrorTime, START_ERROR_MS);
+    startErrorTime = now;
+}
+
+float TitleScreen::startScale() const {
+    const int now = glutGet(GLUT_ELAPSED_TIME);
+    int animationTime = now - startPausedTime;
+    if (startErrorTime >= 0) {
+        // [11.7] 오류 효과 중에는 크기를 고정하고, 끝나면 이어서 움직인다.
+        const int elapsed = now - startErrorTime;
+        animationTime -= std::min(elapsed, START_ERROR_MS);
+    }
+    return 1.0f + 0.035f * std::sin(animationTime * 0.0025f);
+}
+
+float TitleScreen::startErrorStrength() const {
+    if (startErrorTime < 0) return 0.0f;
+    const int elapsed = glutGet(GLUT_ELAPSED_TIME) - startErrorTime;
+    return std::max(0.0f, 1.0f - elapsed / static_cast<float>(START_ERROR_MS));
+}
+
+float TitleScreen::startOffsetX() const {
+    if (startErrorTime < 0) return 0.0f;
+    const int elapsed = glutGet(GLUT_ELAPSED_TIME) - startErrorTime;
+    // [11.7] 최대 12만큼 빠르게 흔들다가 원래 위치로 돌아온다.
+    return std::sin(elapsed * 0.09f) * 12.0f * startErrorStrength();
+}
+
+bool TitleScreen::hitsStart(int x, int y, int width, int height) const {
+    if (width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width, py = y * 675.0f / height;
+    const float halfWidth = 280.0f * startScale(), halfHeight = halfWidth / startAspect;
+    return std::abs(px - (600.0f + startOffsetX())) <= halfWidth && std::abs(py - 535.0f) <= halfHeight;
+}
+
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
     // [11.7] 배경과 같은 셰이더를 사용하고, 메뉴용 투영·투명도만 설정한다.
     const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
@@ -296,6 +368,7 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
 
     if (lobby) {
+        panel(shader, 300, 380, 600, 222, 0.035f, 0.075f, 0.11f, 0.92f);
         centeredText(shader, "LOBBY", 425, 0.9f, 0.96f, 1, 24.0f);
         centeredText(shader, std::string("Welcome, ") + name, 468, 1, 1, 1);
         centeredText(shader, "Login successful", 510, 0.55f, 0.9f, 0.75f);
@@ -303,10 +376,21 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     }
     else {
         // [11.7] 칸에 닉네임과 깜빡이는 커서만 표시한다.
+        panel(shader, 420, 400, 360, 50, 0.035f, 0.075f, 0.11f, 0.9f);
         std::string display = name;
         if ((glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0) display += "_";
         centeredText(shader, display, 430, 1, 1, 1);
-        const std::string status = error.empty() ? "Press Enter to log in" : error;
+        const float halfWidth = 280.0f * startScale(), halfHeight = halfWidth / startAspect;
+        // [11.7] 기존 uiColor로 붉은 기운을 주고 서서히 원래 색으로 돌린다.
+        const float tint = 0.65f * startErrorStrength();
+        if (startTextureId) {
+            drawUIQuad(shader, 600+startOffsetX()-halfWidth, 535-halfHeight, halfWidth*2, halfHeight*2,
+                startTextureId, glm::vec4(1, 1.0f-tint, 1.0f-tint, 1.0f),
+                glm::vec4(startUV[0], startUV[1], startUV[2], startUV[3]));
+        }
+        else centeredText(shader, "GAME START", 540, 0.1f, 0.15f, 0.2f, 24.0f);
+        panel(shader, 270, 604, 660, 32, 0.035f, 0.075f, 0.11f, 0.88f);
+        const std::string status = error.empty() ? "Click GAME START or press Enter" : error;
         centeredText(shader, status, 625, 1, error.empty() ? 1.0f : 0.65f, error.empty() ? 1.0f : 0.6f);
     }
     centeredText(shader, "ESC  -  EXIT", 658, 0.1f, 0.18f, 0.23f, 12.0f);

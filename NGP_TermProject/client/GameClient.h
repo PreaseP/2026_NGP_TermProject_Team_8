@@ -11,6 +11,12 @@ class GameClient {
 public:
     const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
+    // [11.7] 닉네임 오류가 나면 화면에 효과를 한 번 요청한다.
+    bool ConsumeNameError() {
+        const bool occurred = nameErrorEffect;
+        nameErrorEffect = false;
+        return occurred;
+    }
     bool Init(const char* ip);// 서버 IP를 저장하고 네트워크 사용을 준비한다.
     bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
     void Tick(); // [11.6] 주기적으로 클라이언트 처리를 진행한다.
@@ -29,6 +35,7 @@ private:
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
     std::string serverIp; // 접속할 서버의 IP 주소
     std::string errorMessage; //실패한 이유를 적어 둘 문자열
+    bool nameErrorEffect = false; // [11.7] 아직 화면에 알리지 않은 닉네임 오류
     NetworkClient network; // 실제 소켓 연결과 송수신을 담당
     InputHandler inputHandler{this}; // [11.6] 이 GameClient로 입력 요청을 전달한다.
 };
