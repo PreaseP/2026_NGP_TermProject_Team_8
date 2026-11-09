@@ -76,3 +76,50 @@ NET_RESULT NetSession::ReceivePackets(RecvEventQueue* recvQueue, bool readSocket
 		readSocket = false;
 	}
 }
+
+bool NetSession::QueueSendData(const unsigned char* data, int size)
+{
+	if (!inUse || data == nullptr || size <= 0) {
+		return false;
+	}
+
+	const int pendingSize = sendSize - sendOffset;
+	if (size > SEND_BUFFER_SIZE - pendingSize) {
+		return false;
+	}
+
+	if (size > SEND_BUFFER_SIZE - sendSize) {
+		std::memmove(sendBuffer, sendBuffer + sendOffset, pendingSize);
+		sendSize = pendingSize;
+		sendOffset = 0;
+	}
+
+	std::memcpy(sendBuffer + sendSize, data, size);
+	sendSize += size;
+	return true;
+}
+
+NET_RESULT NetSession::FlushSendBuffer()
+{
+	if (!inUse) {
+		return NET_ERROR;
+	}
+
+	const int pendingSize = sendSize - sendOffset;
+	if (pendingSize > 0) {
+		const int sent = send(socket, reinterpret_cast<const char*>(sendBuffer + sendOffset),
+			pendingSize, 0);
+		if (sent == SOCKET_ERROR) {
+			return WSAGetLastError() == WSAEWOULDBLOCK ? NET_WOULD_BLOCK : NET_ERROR;
+		}
+
+		sendOffset += sent;
+		if (sendOffset < sendSize) {
+			return NET_WOULD_BLOCK;
+		}
+	}
+
+	sendSize = 0;
+	sendOffset = 0;
+	return closeAfterSend ? NET_CLOSED : NET_OK;
+}
