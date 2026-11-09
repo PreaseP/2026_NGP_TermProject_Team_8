@@ -30,3 +30,23 @@
 - 달력은 간결하게 유지한다. 모든 클래스 함수에 N/G/I 또는 Inventory 소속을 표시하고 전역 함수에는 접두어를 붙이지 않는다. 상단 범례는 N: NetworkClient / G: GameClient / I: InputHandler만 둔다. 설명은 아주 짧게, 작업 없는 날은 날짜만 남긴다.
 - Inventory는 LLD에서 공통으로 설계한 보유 아이템 관리 자료형이며 아직 구현되지 않았다. 확인 당시 common 폴더에는 protocol.h만 있다. 서버가 지급·사용을 판정하고 클라이언트는 결과를 반영하며, 같은 자료형을 사용해도 데이터가 자동 공유되는 것은 아니다. drawScene은 기존 Main.cpp의 전역 화면 출력 함수로 LLD의 Render 역할이다.
 - 이번 채팅의 마지막 DOCX는 내용·XML 변경을 확인했으나 실제 페이지 배치는 렌더러 부재로 검증하지 못했다. 이전 문서의 렌더 검증 결과를 최신 파일에 그대로 적용하지 않는다. 이번 인계에서는 코드 변경·커밋·푸시를 하지 않는다.
+
+# 2026-11-09 최신 인계 — 11/6·11/7 구현 및 푸시 완료
+
+- 이 추가 기록은 위의 과거 미구현·미커밋 상태보다 우선한다. 기존 이력과 최신 일정 기준은 보존한다. 사용자가 한 단계씩 이해하며 진행하는 작업 방식은 계속 유지한다.
+- 11/6 구현 완료: GameClient::Tick은 기존 PollNetwork를 호출한다. RequestLogin은 닉네임 검사 후 C2S_Login을 QueuePacket에 등록한다. InputHandler의 OnKeyDown/Reset, GameClient 소유 연결, main의 Init/TryConnect, TimerFunction의 Tick, Keyboard/KeyboardUp 연결까지 완료했다. ReceiveData/ExtractPacket 분리 구조는 유지한다.
+- 11/7 구현 완료: ProcessPacket이 S2C_LoginResult를 처리한다. 성공 시 사용자 번호 저장·CLIENT_LOBBY 전환·입력 기록 초기화, 실패 시 로그인 상태·닉네임 유지 및 오류 저장. GetName/GetErrorMessage와 drawScene으로 로그인 또는 임시 로비 안내를 표시한다. 실제 방 목록·입장·네트워크 게임 시작은 아직 없다.
+- 추가 로그인 화면 작업 완료: TitleBackground.png와 투명 GameStart.png, 버튼 클릭 로그인, 크기 애니메이션, 닉네임 오류 시 약 0.45초 붉은색·좌우 흔들림·크기 변화 정지 후 재개. title.cpp/title.h 안에 구현하고 기존 셰이더·VAO를 사용한다. 별도 titleLogin.cpp는 없다.
+- 최종 입력칸은 UI 기준 360×50이다. NICKNAME 제목, Type your nickname 기본 안내, 글자 제한 안내는 제거했다. 빈칸에서는 밑줄만 깜빡이고 입력하면 이름 뒤에 붙는다. 영문·숫자 1~15자 입력 조건은 유지한다. loginPending·중복 요청 차단·10초 타임아웃은 사용자 요청으로 제거한 상태다.
+- 푸시 완료(CJH → origin/CJH): 7b18292는 11/6 주기적 통신·닉네임 로그인 요청, 302b78f는 11/7 로그인 결과와 기본 화면 전환, 7ec6cc1은 입력 화면과 시작 버튼 꾸미기다. 마지막 두 커밋은 별도 복사본으로 각각 빌드·로그인 테스트 후 함께 푸시했다.
+- 검증은 Debug x64 빌드 및 로컬 TCP 테스트, 버튼 효과 계산·클릭 영역 검증이다. 실제 팀 서버 연동 결과로 해석하지 않는다. 최종 입력칸 간소화 및 커밋 분리 후 실제 게임 창의 시각 검증은 새로 수행하지 않았다.
+- 이전 IntelliSense 연쇄 오류는 title.h의 효과 시간 선언을 static constexpr int에서 const int START_ERROR_MS = 450으로 단순화한 뒤 실제 오류 목록 0개를 확인했다. 정확한 분석기 내부 원인은 미확정이며 기존 형변환 빌드 경고와 구분한다.
+- 이번 인계 저장 전 미커밋 파일은 .gitignore와 NGP_TermProject/client/client.vcxproj 두 개였다. local_opengl 폴더 제외 및 기존 SDK가 없을 때 이 PC의 로컬 SDK를 쓰는 설정이다. 게임 코드·이미지는 푸시 완료다. 이 두 설정을 사용자 요청 없이 함께 커밋하거나 되돌리지 않는다.
+- 최신 일정의 11/9 HandleDisconnect 및 OnExit 네트워크 Shutdown 연결은 아직 미구현이다. 다음 요청 때 목적과 변경 파일을 설명한 뒤 사용자 요청 범위만 진행한다. 기존 OnExit의 그래픽 자원 정리와 구분한다.
+- 설명·디스코드 기록은 처음 보는 사람도 이해할 쉬운 한국어로 쓰고 실제 함수명·파일명, 필요하면 현재 줄 번호를 함께 제시한다. 디스코드에는 문구만 작성해 주었으며 직접 전송한 적은 없다. 커밋에서 style은 일반적인 코드 서식 정리 의미로 설명했고, 이번 새 UI·애니메이션은 사용자와 합의한 feat(client) 두 메시지로 커밋했다.
+- 이번 사용자 요청은 기억할 내용을 파일에 저장하는 것이다. AGENTS.md와 docs/CLIENT_PROGRESS.md만 추가 기록하며 코드 수정·새 기능·커밋·푸시는 하지 않는다. 따라서 이번 인계 기록 두 파일은 로컬 미커밋 변경으로 추가된다.
+
+## 2026-11-09 후속 요청 — 다른 PC에서 이어하기
+
+- 사용자가 위 인계 기록을 커밋하고 다른 PC에서 이어가겠다고 요청했다. AGENTS.md와 docs/CLIENT_PROGRESS.md 두 파일만 문서 커밋으로 만들어 CJH → origin/CJH로 푸시한다. 직전의 기록 미커밋 설명은 이번 요청 이전 상태다. .gitignore와 client.vcxproj의 로컬 SDK 설정은 계속 미커밋으로 유지한다.
+- 다른 PC에서는 이 저장소의 CJH 브랜치를 선택하고 최신 origin/CJH를 가져온 뒤 이 파일과 CLIENT_PROGRESS.md의 최신 이어하기 기록부터 읽는다. 로컬 소스 변경이 있으면 보존한 다음 갱신한다. OpenGL SDK와 이번 PC 전용 대체 경로 설정은 원격에 포함하지 않았으므로 다른 PC의 기존 SDK 환경을 먼저 확인한다. 최신 일정 DOCX가 없는 경우 진행 문서의 날짜별 확정표를 사용한다.
