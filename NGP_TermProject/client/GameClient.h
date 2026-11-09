@@ -26,6 +26,8 @@ public:
     void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
 
 private:
+    void HandleDisconnect(); // [11.9] 이전 접속 정보를 비우고 첫 로그인 화면으로 돌아간다.
+
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
     void ProcessPacket(const unsigned char* packet);
 

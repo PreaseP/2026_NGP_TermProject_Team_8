@@ -58,6 +58,19 @@ bool GameClient::TryConnect()
     return true;
 }
 
+// [11.9] 연결이 끊기면 이전 접속 정보를 버리고 새 로그인을 준비한다.
+void GameClient::HandleDisconnect()
+{
+    network.Disconnect(); // [11.9] 소켓과 송수신 버퍼를 비운다.
+    currentState = CLIENT_LOGIN;
+    mySessionId = -1;
+    myRoomId = -1;
+    mySlot = -1;
+    inputHandler = InputHandler{this}; // [11.9] 닉네임과 이동·공격 입력을 모두 비운다.
+    nameErrorEffect = false;
+    errorMessage = "Connection lost. Enter your nickname and press GAME START.";
+}
+
 // [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
 void GameClient::Tick()
 {
@@ -123,16 +136,9 @@ void GameClient::PollNetwork()
     // QueuePacket으로 모아 둔 데이터를 실제로 보낸다.
     const NET_RESULT sendResult = network.FlushSendBuffer();
     if (sendResult == NET_CLOSED || sendResult == NET_ERROR) {
-        if (sendResult == NET_CLOSED) { // 연결이 종료됨
-            errorMessage = "Connection closed while sending.";
-        }
-        else { // NET_ERROR: 데이터를 보내다가 오류 발생
-            errorMessage = "Failed to send data.";
-        }
-        network.Disconnect();
+        HandleDisconnect(); // [11.9] 오류( 데이터를 보내다가 오류 or 연결종료 발생)
         return;
     }
-
     // 송신이 잠시 막혀도 수신은 시도한다. 못 보낸 데이터는 다음 호출에서 다시 보낸다.
     const NET_RESULT recvResult = network.ReceiveData();
 
@@ -142,8 +148,7 @@ void GameClient::PollNetwork()
         const NET_RESULT packetResult = network.ExtractPacket(packet);
         if (packetResult == NET_WOULD_BLOCK) break; // 아직 완성된 패킷이 없다.
         if (packetResult != NET_OK) {
-            errorMessage = "Invalid packet length.";
-            network.Disconnect();
+            HandleDisconnect(); // [11.9] 오류( 받은 데이터에서 패킷을 꺼내는데 길이가 잘못됨 )
             return;
         }
 
@@ -153,16 +158,9 @@ void GameClient::PollNetwork()
     }
 
     if (recvResult == NET_CLOSED || recvResult == NET_ERROR) {
-        if (recvResult == NET_CLOSED) { // 서버가 정상적으로 연결을 종료함
-            errorMessage = "Server closed the connection.";
-        }
-        else { // NET_ERROR: 데이터를 받다가 오류 발생
-            errorMessage = "Failed to receive data.";
-        }
-        network.Disconnect();
+        HandleDisconnect(); // [11.9] 오류( 서버가 연결을 닫았거나 수신 오류 발생 )
         return;
     }
-
 }
 
 // [11.5]패킷 검사와 종류 구분
@@ -170,8 +168,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
 {
     // 이 함수에는 ExtractPacket으로 끝까지 꺼낸 패킷을 전달한다.
     if (packet == nullptr || packet[0] < sizeof(PacketHeader)) {
-        errorMessage = "Invalid packet header.";
-        network.Disconnect();
+        HandleDisconnect(); // [11.9] 오류( 패킷이 없거나 기본 헤더보다 길이가 짧을때 )
         return;
     }
 
@@ -218,14 +215,12 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         expectedSize = sizeof(S2C_GameOver);
         break;
     default: // 서버가 보내기로 정하지 않은 종류
-        errorMessage = "Unknown server packet type.";
-        network.Disconnect();
+        HandleDisconnect(); // [11.9] 오류( 정의하지 않은 패킷 종류 )
         return;
     }
 
     if (packet[0] != expectedSize) {
-        errorMessage = "Packet size does not match its type.";
-        network.Disconnect();
+        HandleDisconnect(); // [11.9] 오류 ( 패킷 종류에 맞는 길이가 아님 )
         return;
     }
 
@@ -248,8 +243,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
             errorMessage = "Server is full. Please try again later.";
         }
         else {
-            errorMessage = "Invalid login response. Please reconnect.";
-            network.Disconnect();
+            HandleDisconnect(); // [11.9] 오류 ( 로그인 응답 값이 잘못됨 )
         }
     }
 }

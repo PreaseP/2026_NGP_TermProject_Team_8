@@ -553,3 +553,23 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 - 기존 로컬 변경을 보존하고 Main.cpp의 UTF-8 및 title.cpp의 기존 인코딩을 유지했다. 커밋·푸시는 하지 않는다.
 - 검증: client Debug x64 빌드·링크 성공(기존 형변환 경고 유지). 이번 변경 파일의 git diff --check 통과. 실제 빌드 대상의 Q/ESC 종료 분기·ESC 종료 안내 제거와 창 X 콜백 유지를 확인했다. cgproj.cpp는 프로젝트의 None 항목인 원본 참고 파일이라 보존했다. 실제 창에서 키 입력·X 종료는 아직 실행 검증하지 않았다.
 - 후속 주석 확인: 삭제된 Q/ESC 종료 동작을 설명하던 주석은 제거·수정했고, Keyboard에 추가했던 불필요한 Q/ESC 미종료 설명도 제거했다. 창 X의 콜백 설명과 실제 자원 정리 주석은 유지한다. 주석만 추가 정리하여 빌드는 반복하지 않았다.
+
+### 2026-11-10 [11.9] 단계 2 — HandleDisconnect 함수 구현
+
+- 사용자 요청에 따라 GameClient.h/.cpp에 private HandleDisconnect() 선언과 구현을 추가했다. 이번 단계는 함수 자체까지만 만들며 PollNetwork/ProcessPacket의 오류 경로에는 아직 연결하지 않는다.
+- network.Disconnect()로 소켓과 송수신 버퍼를 정리하고 CLIENT_LOGIN으로 전환한다. 사용자 번호·방 번호·자리 번호를 -1로 초기화하고, InputHandler{this}를 대입해 닉네임·길이·이동·공격 기록을 초기화하면서 요청 대상은 현재 GameClient로 유지한다.
+- 닉네임 오류 효과 요청을 지우고 연결 종료 및 닉네임 재입력·GAME START 안내를 저장한다. serverIp와 Winsock 초기화 상태는 유지하므로 이후 START 요청에서 재접속할 수 있다. 기존 InputHandler::Reset()의 닉네임 유지 동작은 변경하지 않았다.
+- 현재 화면은 drawScene이 CLIENT_LOGIN을 확인해 로그인 화면을 그리는 구조다. 네트워크 월드 데이터는 아직 구현되지 않아 이번 초기화 대상에 없으며, 추가할 때 정리 대상에도 포함해야 한다. 기존 로컬 게임·그래픽 자원은 이번 함수에서 변경하지 않는다.
+- 다음 단계는 송수신 종료·오류와 잘못된 패킷 검사 경로에서 HandleDisconnect()를 호출하도록 연결하는 것이다. OnExit 네트워크 Shutdown 연결, 새 기능·커밋·푸시는 이번 범위에 포함하지 않는다.
+- 검증: client Debug x64 빌드·링크 성공(기존 형변환 경고 유지), 이번 변경 파일의 git diff --check 통과. HandleDisconnect는 아직 호출하지 않으므로 실제 연결 종료 시 화면 복귀 동작은 다음 연결 단계에서 검증한다.
+- 일정 표기 정정: HandleDisconnect는 11/9 계획의 작업이다. 실제 작성일은 2026-11-10이며 함수 주석의 [11.3]을 [11.9]로 수정했다. 동작 변경은 없어 빌드는 반복하지 않았다.
+
+### 2026-11-10 [11.9] 단계 3 — 오류 경로에 HandleDisconnect 연결
+
+- 사용자 요청으로 GameClient.cpp의 기존 오류 경로 7곳을 HandleDisconnect() 호출로 변경했다. PollNetwork의 송신 종료·오류, 패킷 추출 실패, 수신 종료·오류 및 ProcessPacket의 잘못된 헤더, 알 수 없는 종류, 종류별 길이 불일치, 잘못된 로그인 응답 값에 적용했다.
+- 각 경로는 소켓·버퍼·사용자/방/자리 번호·닉네임·입력 기록을 비우고 CLIENT_LOGIN으로 돌아간다. 개별 오류 문자열은 공통 재로그인 안내로 통일해 불필요한 기존 문자열 대입도 제거했다. 정상적인 닉네임 거절·서버 정원 초과 응답과 NET_WOULD_BLOCK은 기존 처리를 유지한다.
+- 기존 수신 순서(종료 감지 전 수신된 완성 패킷 처리 후 연결 정리)는 유지한다. HandleDisconnect 내부에서만 network.Disconnect를 직접 호출한다. GameClient.h, Main.cpp, NetworkClient, InputHandler, 서버, 공통 프로토콜은 이번 단계에서 수정하지 않았다.
+- 검증: client Debug x64 빌드·링크 성공(기존 형변환 경고 유지), 변경 파일의 git diff --check 통과. 무시되는 .vs/Disconnect1109 임시 실행 파일은 실제 GameClient/InputHandler/NetworkClient 소스를 빌드해 loopback의 임시 포트로 검증했다. 테스트용 private 접근은 임시 소스에만 있으며 게임 소스에 테스트 경로를 추가하지 않았다.
+- PASS: 로비에서 서버 정상 종료 후 상태·ID·방 정보·닉네임·입력·버퍼·오류 효과 요청 초기화 및 서버 IP/Winsock/입력 대상 보존. 새 TCP 연결 후 새 닉네임의 로그인 패킷 전송과 새로운 서버 응답 ID 저장도 확인했다. 임시 포트 재연결은 테스트가 NetworkClient::ConnectToServer를 호출했으며, 기본 9000 포트의 실제 START 자동 재접속을 실행 검증한 것은 아니다.
+- PASS: 송신 오류, 수신 오류, 잘못된 패킷 길이·알 수 없는 종류·종류별 길이 불일치·잘못된 로그인 응답의 초기화. 마지막 로그인 성공 패킷과 서버 종료가 이어져도 최종 상태는 CLIENT_LOGIN이었다. NET_WOULD_BLOCK에서 연결 유지 및 닉네임 거절·서버 정원 초과에서 연결/닉네임 유지도 확인했다.
+- 실제 GLUT 화면·팀 서버 연동은 이번 검증에 포함하지 않았다. OnExit의 네트워크 Shutdown 연결은 다음 단계로 남긴다. 커밋·푸시는 하지 않았다.
