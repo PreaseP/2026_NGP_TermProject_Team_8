@@ -115,7 +115,7 @@ static bool faceTexturesLoaded = false;
 // [변경 1] 창과 그래픽 준비를 맡는 함수 선언. argc는 GLUT가 갱신할 수 있어 참조로 받는다.
 bool InitOpenGL(int& argc, char** argv);
 
-// [통합 종료] 창 닫기 콜백 전용 정리 함수. ESC/Q에서는 직접 호출하지 않는다.
+// [통합 종료] 창 닫기 콜백 전용 정리 함수.
 void OnExit();
 
 void Mouse(int button, int state, int x, int y);
@@ -176,7 +176,7 @@ bool InitOpenGL(int& argc, char** argv)
 		return false;
 	}
 	// [통합 종료 1] GL 함수가 준비된 뒤, 실제 정리는 창 닫기 콜백 한 곳에만 등록한다.
-	// ESC/Q로 루프를 끝내도 freeglut이 창을 정리하면서 이 콜백을 호출한다.
+	// [11.3] 창 X로 닫으면 freeglut이 이 콜백을 호출한다.
 	glutCloseFunc(OnExit);
 
 	// OpenGL 버전 확인
@@ -285,7 +285,7 @@ int main(int argc, char** argv)
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
 	std::cout << "닉네임 입력 후 GAME START 클릭 또는 Enter: 로그인" << std::endl; // [11.7]
-	std::cout << "ESC: 종료" << std::endl;
+	std::cout << "종료: 창의 X 버튼" << std::endl;
 
 	//--- 콜백 등록
 	glutDisplayFunc(drawScene);
@@ -496,20 +496,13 @@ void initializeGame() {
 	std::cout << "E: Steve 눈덩이 발사" << std::endl;
 	std::cout << "O: Alex 눈덩이 발사" << std::endl;
 	std::cout << "X: 모든 눈 제거" << std::endl;
-	std::cout << "ESC: 종료" << std::endl;
+	std::cout << "종료: 창의 X 버튼" << std::endl;
 
 	finishScreen.initialize();
 }
 
 void Keyboard(unsigned char key, int x, int y)
 {
-	// [11.6]
-	if (key == 27 || ((key == 'q' || key == 'Q') && gameClient.GetState() != CLIENT_LOGIN)) {
-		// [통합 종료 3] 여기서는 종료 요청만 한다.
-		glutLeaveMainLoop();
-		return;
-	}
-
 	// [11.6]
 	if (gameClient.GetState() == CLIENT_LOGIN) {
 		gameClient.OnKeyDown(key);

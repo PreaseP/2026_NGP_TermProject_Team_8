@@ -132,7 +132,6 @@ void TitleScreen::render(GLuint shaderProgram) const {
     renderText("MINECRAFT SNOWBALL FIGHT", 0.0f, 0.3f, 2.0f);
     renderText("1 - First Person Mode", 0.0f, 0.0f, 1.0f);
     renderText("3 - Third Person Mode", 0.0f, -0.2f, 1.0f);
-    renderText("ESC - Exit", 0.0f, -0.4f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -153,12 +152,6 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
     case '3':
         std::cout << "3인칭 모드로 게임 시작!" << std::endl;
         return GameState::THIRD_PERSON_MODE;
-    case 27:
-    case 'q': case 'Q':
-        std::cout << "게임 종료" << std::endl;
-        // [OnExit 5] Main.cpp handles exit keys before calling this menu handler.
-        return GameState::TITLE_SCREEN;
-        break;
     default:
         return GameState::TITLE_SCREEN;
     }
@@ -393,7 +386,6 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
         const std::string status = error.empty() ? "Click GAME START or press Enter" : error;
         centeredText(shader, status, 625, 1, error.empty() ? 1.0f : 0.65f, error.empty() ? 1.0f : 0.6f);
     }
-    centeredText(shader, "ESC  -  EXIT", 658, 0.1f, 0.18f, 0.23f, 12.0f);
     // [11.7] 다음 배경·게임 출력에는 기존 셰이더 동작을 사용한다.
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
     glBindVertexArray(0); glBindTexture(GL_TEXTURE_2D, 0);
