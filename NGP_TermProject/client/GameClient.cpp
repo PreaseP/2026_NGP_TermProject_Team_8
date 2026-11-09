@@ -1,6 +1,7 @@
 ﻿#include "GameClient.h"
 
 #include <cstddef>
+#include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
 
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
 bool GameClient::Init(const char* ip)
@@ -28,6 +29,7 @@ bool GameClient::Init(const char* ip)
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    inputHandler.Reset(); // [11.6] 시작할 때 이전 이동·공격 입력 기록을 비운다.
     errorMessage.clear(); // 초기화에 성공했으므로 이전 오류 메시지를 지운다.
     return true;
 }
@@ -51,6 +53,58 @@ bool GameClient::TryConnect()
 
     // 성공하면 로그인 화면 상태로 설정
     currentState = CLIENT_LOGIN;
+    errorMessage.clear();
+    return true;
+}
+
+// [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
+void GameClient::Tick()
+{
+    PollNetwork();
+}
+
+// [11.6] 로그인 성공 여부는 이후 서버 응답으로 확인한다.
+bool GameClient::RequestLogin(const char* name)
+{
+    if (currentState != CLIENT_LOGIN) {
+        errorMessage = "Login is only available on the login screen.";
+        return false;
+    }
+    if (name == nullptr || name[0] == '\0') {
+        errorMessage = "Enter a nickname.";
+        return false;
+    }
+
+    // 마지막 한 칸은 문자열 끝을 나타내는 널 문자 자리다.
+    std::size_t nameLength = 0;
+    while (nameLength < MAX_NAME_LEN && name[nameLength] != '\0') {
+        const char ch = name[nameLength];
+        if (!((ch >= 'A' && ch <= 'Z') ||
+              (ch >= 'a' && ch <= 'z') ||
+              (ch >= '0' && ch <= '9'))) {
+            errorMessage = "Use only English letters and numbers.";
+            return false;
+        }
+        ++nameLength;
+    }
+    if (nameLength >= MAX_NAME_LEN) {
+        errorMessage = "Nickname is too long.";
+        return false;
+    }
+
+    // 연결이 없으면 기존 접속 함수를 사용한다. 실패 이유는 그대로 남긴다.
+    if (!network.IsConnected() && !TryConnect()) return false;
+
+    C2S_Login packet{}; // 모두 0으로 시작하므로 닉네임 뒤에 널 문자가 남는다.
+    packet.size = static_cast<unsigned char>(sizeof(packet));
+    packet.type = C2S_LOGIN;
+    std::memcpy(packet.name, name, nameLength);
+
+    // 실제 송신은 다음 PollNetwork 호출에서 진행한다.
+    if (!network.QueuePacket(&packet)) {
+        errorMessage = "Failed to queue login request.";
+        return false;
+    }
     errorMessage.clear();
     return true;
 }

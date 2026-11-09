@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "NetworkClient.h"
+#include "InputHandler.h" // [11.6]
 #include <string>
 
 enum CLIENT_STATE { CLIENT_LOGIN, CLIENT_LOBBY, CLIENT_ROOM, CLIENT_PLAYING, CLIENT_RESULT };
@@ -10,7 +11,11 @@ class GameClient {
 public:
     bool Init(const char* ip);// 서버 IP를 저장하고 네트워크 사용을 준비한다.
     bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
+    void Tick(); // [11.6] 주기적으로 클라이언트 처리를 진행한다.
+    bool RequestLogin(const char* name); // [11.6] 닉네임을 검사하고 로그인 요청을 버퍼에 넣는다.
     void PollNetwork(); // [11.5] 쌓인 데이터를 보내고 도착한 데이터를 받는다.
+    CLIENT_STATE GetState() const { return currentState; } // [11.6] 입력 처리기가 현재 상태를 확인한다.
+    void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
 
 private:
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
@@ -23,4 +28,5 @@ private:
     std::string serverIp; // 접속할 서버의 IP 주소
     std::string errorMessage; //실패한 이유를 적어 둘 문자열
     NetworkClient network; // 실제 소켓 연결과 송수신을 담당
+    InputHandler inputHandler{this}; // [11.6] 이 GameClient로 입력 요청을 전달한다.
 };

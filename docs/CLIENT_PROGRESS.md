@@ -363,3 +363,73 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 - 이 채팅에서는 일정 DOCX를 수정하고 코드·커밋을 읽었을 뿐, 실제 게임 코드는 수정하지 않았다. 이번 인계 기록 갱신으로 구현 완료 상태가 달라지지 않는다.
 - 최신 DOCX는 내용·함수 소속·XML 수정 여부를 확인했지만 렌더러 부재로 실제 페이지 잘림은 미검증이다. 앞선 저장소 DOCX의 Word 렌더 결과를 이 최신 파일의 검증으로 대체하지 않는다.
 - MD 최신화는 기존 내용을 보존한 추가 기록 방식으로 수행한다. 코드·DOCX 원본 변경, 커밋·푸시는 이번 요청에 포함하지 않는다.
+
+### 2026-11-08 구현 — 11/6 첫 단계: Tick 추가
+
+- 사용자 요청에 따라 한 단계만 구현했다. GameClient.h/.cpp에 void Tick() 선언과 정의를 추가했다.
+- Tick은 주기적인 클라이언트 처리의 진입점이며 현재는 기존 PollNetwork()를 한 번 호출한다. 연결 여부 확인과 송수신·패킷 검사는 기존 PollNetwork가 담당한다.
+- ReceiveData/ExtractPacket 분리 구조와 기존 주석을 유지했다. Tick에서 송수신을 중복 호출하지 않는다.
+- Main.cpp 및 TimerFunction에는 아직 연결하지 않았다. 따라서 게임 실행 중 Tick이 자동 호출되는 상태는 아니다. 로그인 입력·RequestLogin·상태 반영도 아직 미구현이다.
+- 검증: 변경 차이와 선언·정의 일치를 확인했다. 이번 단계에서 빌드·실행 테스트는 수행하지 않았다.
+- 다음 단계는 기존 main의 초기화·접속 및 TimerFunction의 Tick 호출 연결 범위를 설명하고 사용자 요청에 따라 진행하는 것이다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-08 구현 — 11/6 두 번째 단계: 시작·타이머 연결
+
+- 사용자 요청에 따라 Main.cpp에 GameClient 객체를 추가하고, 그래픽 초기화 성공 후 Init("127.0.0.1") → TryConnect()를 호출하도록 연결했다. 같은 PC 서버를 기본 대상으로 사용하며 포트는 기존 SERVER_PORT(9000)를 따른다.
+- 초기화 실패 시 접속은 시도하지 않는다. 초기화·접속 실패는 콘솔에 표시하고 기존 화면은 계속 실행한다. 자동 재접속은 추가하지 않았다. 최초 접속은 기존 blocking connect 방식이다.
+- TimerFunction 맨 앞에서 Tick()을 한 번 호출한다. 타이틀 화면의 조기 반환보다 앞에 두어 화면에 관계없이 통신을 처리한다. Tick → PollNetwork 구조로 송수신 중복 호출을 피했다.
+- GameClient.h는 OpenGL 헤더보다 먼저 포함해 Winsock 헤더 순서를 지켰다. 기존 게임 로직·주석과 ReceiveData/ExtractPacket 분리 구조는 보존했다.
+- 검증: git diff --check 통과. Debug x64 전체 빌드를 시도했지만 기존 GLM(glm/glm.hpp) 및 freeglut(gl/freeglut.h) 의존성 누락으로 실패했다. GameClient.cpp 컴파일에는 오류가 보고되지 않았으나 Main.cpp 컴파일·링크·실제 접속과 화면 실행은 검증하지 못했다.
+- 로그인 입력·RequestLogin·로그인 응답 반영은 아직 미구현이다. OnExit의 네트워크 Shutdown 연결도 11/9 작업으로 남아 있으며, 현재 시작·통신 연결을 전체 수명 관리 완료로 해석하지 않는다.
+- 다음 단계는 RequestLogin의 패킷 생성·전송 대기열 등록을 설명하고 한 함수씩 진행하는 것이다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 구현 — 11/6 세 번째 단계: RequestLogin
+
+- 사용자 요청에 따라 GameClient.h/.cpp에 bool RequestLogin(const char* name) 한 함수를 추가했다. 공용 프로토콜 및 리팩토링 LLD의 로그인 조건을 확인했다.
+- 로그인 상태 확인 → 빈 닉네임 및 영문·숫자 1~15자 검사 → 필요 시 기존 TryConnect로 재접속 → C2S_Login 생성 → QueuePacket 등록 순서다. MAX_NAME_LEN=16 중 마지막 칸은 널 문자용으로 남긴다.
+- 패킷을 0으로 초기화하고 size/type/name을 채운다. true는 송신 버퍼 등록 성공이며 로그인 성공이나 실제 전송 완료를 뜻하지 않는다. 실제 송신은 기존 Tick → PollNetwork → FlushSendBuffer 경로에서 수행한다.
+- 입력 검사는 접속 시도 전에 진행한다. 재접속 실패 시 TryConnect의 오류 메시지를 유지한다. 로그인 응답에 의한 상태 전환과 중복 요청 대기 제어는 이번에 추가하지 않았다.
+- 검증: Debug x64 전체 빌드·링크 성공. 기존 게임의 형변환 경고만 남는다. git diff --check 통과. 실제 서버 로그인 및 입력 연동 테스트는 아직 수행하지 않았다.
+- InputHandler와 Keyboard에는 아직 연결하지 않아 키 입력으로 요청이 발생하지 않는다. 다음 단계는 닉네임 입력을 관리할 InputHandler를 한 단계씩 구현하는 것이다. 기존 주석·Main·NetworkClient·protocol.h는 이번 작업에서 수정하지 않았다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 구현 — 11/6 네 번째 단계: InputHandler 기본 틀과 Reset
+
+- 사용자와 합의한 한 단계 범위로 InputHandler.h/.cpp를 새로 만들고 기존 client.vcxproj 및 filters에 등록했다.
+- 리팩토링 LLD에 맞춰 game 포인터, previousKeys, attackPressed, nameBuffer[MAX_NAME_LEN], nameLength를 초기값과 함께 선언했다. game은 아직 nullptr이며 GameClient 소유·입력 전달 연결은 다음 단계다.
+- Reset은 설계대로 이동 기록(previousKeys=0)과 공격 버튼 상태(attackPressed=false)만 초기화한다. 닉네임과 game 포인터는 유지한다. 앞선 일반적인 입력 초기화 설명을 닉네임 삭제로 해석하지 않는다.
+- nameBuffer는 객체 생성 시 0으로 초기화되고 nameLength는 0이다. 아직 닉네임 추가·삭제·Enter 처리나 OnKeyDown, 실제 이동·공격 처리는 구현하지 않았다. Main.cpp, GameClient 및 기존 KeyManager도 이번 단계에서는 수정하지 않았다.
+- 검증: 처음 컴파일에서 새 파일의 UTF-8 무BOM을 CP949로 해석하는 오류를 확인해 새 두 파일만 UTF-8 BOM 및 CRLF로 저장했다. 이후 Debug x64 컴파일·링크 성공, 이번 증분 빌드 경고 없음. git diff --check 통과. 아직 호출 연결이 없어 실제 입력 동작 검증은 하지 않았다.
+- 다음 단계는 OnKeyDown의 로그인 입력 처리와 GameClient에 요청을 전달할 연결을 설명하고 사용자 요청에 맞춰 진행한다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 구현 — 11/6 다섯 번째 단계: OnKeyDown 로그인 입력
+
+- InputHandler::OnKeyDown(unsigned char key)를 추가했다. 요청 대상이 없거나 로그인 상태가 아니면 반환한다. 영문·숫자 최대 15자 입력, Backspace 삭제, Enter의 RequestLogin 호출을 구현했다. 빈 문자열 삭제와 최대 길이 입력에서도 널 종료를 유지한다.
+- RequestLogin이 false이면 닉네임을 그대로 두고 반환한다. 자동 반복·종료는 없으며 다음 Enter 호출로 다시 요청할 수 있다. true여도 서버 응답 전 상태를 변경하거나 닉네임을 지우지 않는다. 오류 문자열은 기존 GameClient에 저장되지만 화면 표시는 아직 없다. 응답 대기 중 중복 Enter 억제는 아직 구현하지 않았다.
+- GameClient가 InputHandler inputHandler{this}를 소유하도록 연결했다. InputHandler 생성자는 대상 주소를 기억하고, GameClient::GetState() const는 입력 처리에 필요한 현재 상태만 읽도록 추가했다. 기존 Init/TryConnect 구현 및 사용자 수정 주석은 보존했다.
+- 검증: Debug x64 전체 빌드·링크 성공. 기존 게임 코드의 형변환 경고만 남는다. git diff --check 통과. 실제 키보드·서버 실행 테스트는 하지 않았다.
+- Main.cpp의 Keyboard는 아직 연결하지 않았다. 따라서 실행 중 키를 눌러도 새 입력 처리기가 호출되는 상태는 아니다. 다음 단계는 기존 콜백의 종료 키·게임 시작 키와 로그인 입력이 충돌하지 않도록 설명한 뒤 Keyboard 연결을 진행하는 것이다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 구현 — 11/6 여섯 번째 단계: Keyboard 연결
+
+- 사용자 요청으로 Main.cpp의 Keyboard/KeyboardUp만 로그인 입력에 맞춰 연결했다. GameClient.h에 입력 처리기로 전달하는 공개 OnKeyDown 래퍼를 추가했다.
+- 수정 직후 위치: Main.cpp 508~509줄에서 ESC는 항상 종료, Q/q는 로그인 상태가 아닐 때만 종료하도록 조건을 변경했다. 기존 종료 주석은 보존하고 새 예외 설명을 붙였다.
+- Main.cpp 515~520줄에서 CLIENT_LOGIN이면 gameClient.OnKeyDown(key)를 호출하고 재출력을 요청한 뒤 반환한다. 따라서 1/3은 기존 로컬 게임 시작 대신 닉네임으로 입력되며 게임 조작에 중복 전달되지 않는다.
+- Main.cpp 589~590줄에서 로그인 중 KeyboardUp은 즉시 반환하여 기존 이동 키 처리·눈덩이 발사를 실행하지 않는다. GameClient.h 18줄의 OnKeyDown은 InputHandler::OnKeyDown으로 전달만 한다.
+- 현재 로그인 결과에 따른 상태 전환은 미구현이므로 CLIENT_LOGIN에 머문다. 기존 타이틀 화면 및 1/3 조작 안내는 아직 남지만 해당 키로 로컬 게임을 시작하지 않는다. 닉네임·오류 메시지 화면 표시도 미구현이며 화면 표시·서버 응답은 다음 단계다.
+- 검증: Debug x64 전체 빌드·링크 성공, 기존 형변환 경고만 유지. git diff --check 통과. 실제 창의 키 입력·실제 서버 로그인은 이번에 실행 검증하지 않았다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 구현·검증 — 11/6 초기화 연결 및 입력·송신 점검
+
+- 사용자 요청으로 GameClient::Init의 상태 초기화 부분에 inputHandler.Reset() 한 줄을 연결했다. 기존 주석은 보존했다. 닉네임과 입력 대상은 Reset에서 유지한다.
+- client Debug x64 빌드·링크 성공. .vs/Login1106에만 임시 테스트를 작성하고 실제 GameClient/InputHandler/NetworkClient 소스를 컴파일해 로컬 TCP 서버로 검증했다. 테스트용 private 접근은 임시 파일에만 있으며 게임 프로젝트에는 추가하지 않았다.
+- PASS: Init에서 이동·공격 기록 초기화, 빈 이름 Enter 거절, player의 각 글자 입력 후 Tick에서도 미전송, Backspace 및 금지 문자 무시, Enter 직후 버퍼 등록만 수행, 다음 Tick에서 정확한 C2S_Login 크기·종류·player 문자열 수신, 중복 전송 없음, 서버 응답 전 CLIENT_LOGIN 유지.
+- PASS: 빈 이름에서 Backspace 반복 안전, q/Q/1/3 입력 허용, 15자 제한·널 종료, Reset에서 닉네임·대상 유지, 로그인 외 상태에서 글자 편집 무시. 테스트 서버·소켓·Winsock은 테스트 종료 시 정리했다.
+- 11/6의 예정 함수 구현·연결 및 입력 처리기부터 TCP 전송까지 점검 완료. 실제 GLUT 창의 물리 키 입력·ESC 종료와 팀 서버 로그인은 이번 테스트 범위가 아니다. 11/7 로그인 결과 처리·닉네임/오류 화면 표시, 11/9 OnExit 네트워크 정리는 여전히 미구현이다.
+- 다음 단계는 11/7 ProcessPacket의 S2C_LOGIN_RESULT 실제 상태 반영이다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-09 커밋 분리 — 일정 11/6 범위
+
+- 사용자 요청에 따라 Tick, RequestLogin, InputHandler의 OnKeyDown/Reset 및 main·TimerFunction·Keyboard/KeyboardUp 연결과 InputHandler 프로젝트 등록만 하나의 커밋으로 분리한다.
+- 로그인 응답의 상태 반영, 닉네임 화면·시작 버튼·오류 효과, 셰이더·이미지와 로컬 OpenGL SDK 경로 복구는 이번 커밋에서 제외하며 작업 폴더에 보존한다. 닉네임을 화면에 읽어 주는 GetName도 이후 화면 작업으로 남긴다.
+- 이 커밋 단계는 서버 응답 전 CLIENT_LOGIN을 유지하는 입력·송신 단계다. 기존 타이틀의 1/3 안내는 남지만 로그인 입력에서 해당 키를 처리하므로 로컬 게임 시작으로 전달되지 않는다. 전체 네트워크 종료 연결은 이후 일정으로 남는다.
+- 기존 작업 기록은 보존하며, 앞선 미구현·커밋 미실행 표기는 각 기록 작성 시점의 상태다. 이번에 선택한 11/6 코드만 별도 복사본에서 빌드·입력·TCP 송신 검증 후 CJH에서 origin/CJH로 커밋·푸시한다.

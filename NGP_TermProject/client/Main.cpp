@@ -1,6 +1,8 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
 #define STB_IMAGE_IMPLEMENTATION
 
+// [11.6] Winsock2가 OpenGL의 Windows 헤더보다 먼저 포함되도록 한다.
+#include "GameClient.h"
 #include <iostream>
 #include <gl/glew.h>
 #include <gl/freeglut.h>
@@ -69,6 +71,8 @@ static Steve::Character* steve = nullptr;
 static Alex::Character* alex = nullptr;
 static Snow snowSystem("snow.png");
 static KeyManager input;
+// [11.6] 시작 함수와 타이머에서 같은 클라이언트를 사용한다.
+static GameClient gameClient;
 
 static bool steveThrowFlag = false;
 static bool alexThrowFlag = false;
@@ -266,6 +270,17 @@ int main(int argc, char** argv)
 		glutDestroyWindow(glutGetWindow());
 		glutMainLoopEvent(); // 예약된 창 닫기를 처리하고, 등록되어 있으면 OnExit 호출
 		return 1;
+	}
+
+	// [11.6] 일단 같은 PC의 서버에 접속한다. 팀 서버 연결 시 주소 변경
+	if (!gameClient.Init("127.0.0.1")) {
+		std::cerr << "클라이언트 네트워크 초기화 실패" << std::endl;
+	}
+	else if (!gameClient.TryConnect()) {
+		std::cerr << "서버 접속 실패" << std::endl;
+	}
+	else {
+		std::cout << "서버 접속 완료" << std::endl;
 	}
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
@@ -490,9 +505,17 @@ void initializeGame() {
 void Keyboard(unsigned char key, int x, int y)
 {
 	// [종료 변경 5] 모든 화면의 ESC/Q를 같은 경로로 처리한다.
-	if (key == 27 || key == 'q' || key == 'Q') {
+	// [11.6] 로그인 중에는 Q도 닉네임에 사용한다. ESC는 항상 종료한다.
+	if (key == 27 || ((key == 'q' || key == 'Q') && gameClient.GetState() != CLIENT_LOGIN)) {
 		// [통합 종료 3] 여기서는 종료 요청만 한다. 자원 정리는 창 닫기 콜백이 맡는다.
 		glutLeaveMainLoop();
+		return;
+	}
+
+	// [11.6]
+	if (gameClient.GetState() == CLIENT_LOGIN) {
+		gameClient.OnKeyDown(key);
+		glutPostRedisplay();
 		return;
 	}
 
@@ -563,6 +586,9 @@ void Keyboard(unsigned char key, int x, int y)
 
 void KeyboardUp(unsigned char key, int x, int y)
 {
+	// [11.6]
+	if (gameClient.GetState() == CLIENT_LOGIN) return;
+
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}
@@ -974,6 +1000,9 @@ void checkAlexMoving()
 
 void TimerFunction(int value)
 {
+	// [11.6] 타이틀 화면에서도 통신을 처리하도록 화면 검사 전에 호출한다.
+	gameClient.Tick();
+
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		glutPostRedisplay();
 		glutTimerFunc(16, TimerFunction, 1);
