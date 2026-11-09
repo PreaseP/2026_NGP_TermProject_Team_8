@@ -573,3 +573,17 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 - PASS: 로비에서 서버 정상 종료 후 상태·ID·방 정보·닉네임·입력·버퍼·오류 효과 요청 초기화 및 서버 IP/Winsock/입력 대상 보존. 새 TCP 연결 후 새 닉네임의 로그인 패킷 전송과 새로운 서버 응답 ID 저장도 확인했다. 임시 포트 재연결은 테스트가 NetworkClient::ConnectToServer를 호출했으며, 기본 9000 포트의 실제 START 자동 재접속을 실행 검증한 것은 아니다.
 - PASS: 송신 오류, 수신 오류, 잘못된 패킷 길이·알 수 없는 종류·종류별 길이 불일치·잘못된 로그인 응답의 초기화. 마지막 로그인 성공 패킷과 서버 종료가 이어져도 최종 상태는 CLIENT_LOGIN이었다. NET_WOULD_BLOCK에서 연결 유지 및 닉네임 거절·서버 정원 초과에서 연결/닉네임 유지도 확인했다.
 - 실제 GLUT 화면·팀 서버 연동은 이번 검증에 포함하지 않았다. OnExit의 네트워크 Shutdown 연결은 다음 단계로 남긴다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-10 [11.9] 단계 4 — 창 종료 시 네트워크 Shutdown 연결
+
+- 사용자 요청으로 GameClient.h에 public Shutdown()을 선언하고 GameClient.cpp에서 기존 network.Shutdown()을 호출하도록 구현했다. 로그인 화면으로 돌아가는 HandleDisconnect와 프로그램 종료용 Shutdown은 각각의 역할을 유지한다.
+- Main.cpp의 OnExit 시작에서 gameClient.Shutdown()을 호출한다. 기존 glutCloseFunc(OnExit)에 따라 창 X로 닫을 때 네트워크를 먼저 정리하고 기존 입력·그래픽 자원 정리를 이어서 수행한다. 네트워크 종료 연결 전의 오래된 TODO 주석만 제거하고 다른 기존 주석·정리 동작은 보존했다.
+- 기존 NetworkClient::Shutdown은 Disconnect로 소켓·송수신 버퍼를 정리한 뒤 initialized인 경우에만 WSACleanup을 호출하고 initialized를 false로 바꾼다. 연결 전·연결 실패 후·이미 끊긴 상태에도 호출할 수 있으며 이번 단계에서 NetworkClient나 서버·프로토콜은 수정하지 않았다. 새 종료 버튼과 Q/ESC 종료는 추가하지 않았다.
+- 검증: client Debug x64 빌드·링크 성공(기존 형변환 경고 유지), 변경 파일의 git diff --check 통과. .vs/Disconnect1109의 임시 테스트에서 GameClient::Shutdown 공개 경로를 사용해 초기화 전·초기화 후 미접속·실제 TCP 접속 중·반복 호출을 검증했다. 상대 소켓의 EOF, 송수신 버퍼 정리, Winsock 참조 균형을 확인했고 기존 연결 종료·재로그인·패킷 오류·정상 거절 응답 테스트도 통과했다.
+- 실제 게임 창의 X 클릭 및 팀 서버 연동은 이번에 실행 검증하지 않았다. 11/9의 HandleDisconnect 구현·오류 경로 연결·OnExit 네트워크 종료 연결은 구현 완료이며, 다음 일정 기능은 사용자 요청 후 진행한다. 커밋·푸시는 하지 않았다.
+
+### 2026-11-10 커밋 분리·푸시 요청
+
+- 사용자가 합의한 세 커밋으로 나누어 CJH에서 origin/CJH로 푸시하도록 요청했다. 1번은 키보드 종료 제거, 2번은 HandleDisconnect와 오류 경로 연결, 3번은 Shutdown과 OnExit 연결이다. 각 변경과 해당 진행 기록을 함께 담는다. 위의 미커밋·미푸시 설명은 이 요청 전 작업 이력이다.
+- 기존 NetworkClient/Snow 수정, 관련 없는 Main.cpp 주석 수정, AGENTS.md, 사용자 DOCX와 로컬 이미지 백업은 작업 폴더에 보존한다. 오류 경로의 사용자 수정 주석은 기능과 함께 보존한다.
+- 분리한 세 커밋 각각의 소스로 별도 폴더에서 Debug x64 전체 재빌드에 성공했다(기존 형변환 경고 유지). 최종 커밋 소스로도 TCP 종료·오류·새 로그인·Shutdown 테스트가 통과했다. 검증용 SDK 경로만 임시 지정했으며 실제 게임 창의 X 클릭·팀 서버 연동은 검증 완료로 표시하지 않는다.

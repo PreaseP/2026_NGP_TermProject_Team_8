@@ -203,6 +203,8 @@ bool InitOpenGL(int& argc, char** argv)
 // [통합 종료] freeglut이 창을 닫을 때 한 번 호출한다. 직접 호출하지 않는다.
 void OnExit()
 {
+	gameClient.Shutdown(); // [11.9] 창이 닫히면 네트워크부터 정리한다.
+
 	input.clearAll();
 	steveCharging = alexCharging = false;
 	steveThrowFlag = alexThrowFlag = false;
@@ -255,7 +257,6 @@ void OnExit()
 	std::free(fragmentSource);
 	vertexSource = fragmentSource = nullptr;
 
-	// 나중에 서버 연결을 구현하면 연결 종료도 이곳에서 호출한다.
 	std::cout << "종료 정리 완료" << std::endl;
 }
 // [종료 변경 3 끝]

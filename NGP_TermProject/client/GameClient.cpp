@@ -35,6 +35,12 @@ bool GameClient::Init(const char* ip)
     return true;
 }
 
+// [11.9] 창을 닫을 때 소켓과 송수신 버퍼를 비우고 Winsock 사용을 마친다.
+void GameClient::Shutdown()
+{
+    network.Shutdown();
+}
+
 // [11.4] 서버 IP로 실제 접속을 시도하는 함수
 bool GameClient::TryConnect()
 {

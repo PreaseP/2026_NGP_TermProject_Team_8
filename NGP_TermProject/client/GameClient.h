@@ -18,6 +18,7 @@ public:
         return occurred;
     }
     bool Init(const char* ip);// 서버 IP를 저장하고 네트워크 사용을 준비한다.
+    void Shutdown(); // [11.9] 프로그램 종료 시 네트워크 사용을 마무리한다.
     bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
     void Tick(); // [11.6] 주기적으로 클라이언트 처리를 진행한다.
     bool RequestLogin(const char* name); // [11.6] 닉네임을 검사하고 로그인 요청을 버퍼에 넣는다.
