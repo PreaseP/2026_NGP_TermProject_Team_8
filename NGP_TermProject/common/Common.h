@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <winsock2.h>
 #include <vector>
@@ -14,24 +14,24 @@ constexpr int INVALID_ID = -1;
 
 enum NET_RESULT
 {
-    NET_OK,
-    NET_WOULD_BLOCK,
-    NET_CLOSED,
-    NET_ERROR
+	NET_OK,
+	NET_WOULD_BLOCK,
+	NET_CLOSED,
+	NET_ERROR
 };
 
 
 class NetUtil {
 public:
-    static bool ConfigureSocket(SOCKET sock, bool noDelay); // ³Íºí·ÎÅ·°ú TCP_NODELAY ¼³Á¤
+	static bool ConfigureSocket(SOCKET sock, bool noDelay); // ë„Œë¸”ë¡œí‚¹ê³¼ TCP_NODELAY ì„¤ì •
 };
 
 class Inventory {
 public:
-    ITEM_TYPE items[MAX_ITEMS] = {};
-    int       itemCount = 0;
-    bool Add(ITEM_TYPE item); // ¾ÆÀÌÅÛ Áö±Ş
-    bool Remove(ITEM_TYPE item); // ¾ÆÀÌÅÛ Á¦°Å
-    bool Has(ITEM_TYPE item) const; // item¿¡ ÇØ´çÇÏ´Â ¾ÆÀÌÅÛÀ» °¡Áö°í ÀÖ´ÂÁö È®ÀÎ
-    void Clear(); // ÀÎº¥Åä¸® ÃÊ±âÈ­
+	ITEM_TYPE items[MAX_ITEMS] = {};
+	int       itemCount = 0;
+	bool Add(ITEM_TYPE item); // ì•„ì´í…œ ì§€ê¸‰
+	bool Remove(ITEM_TYPE item); // ì•„ì´í…œ ì œê±°
+	bool Has(ITEM_TYPE item) const; // itemì— í•´ë‹¹í•˜ëŠ” ì•„ì´í…œì„ ê°€ì§€ê³  ìˆëŠ”ì§€ í™•ì¸
+	void Clear(); // ì¸ë²¤í† ë¦¬ ì´ˆê¸°í™”
 };
