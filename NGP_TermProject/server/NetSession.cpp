@@ -1,6 +1,6 @@
 #include "NetSession.h"
 
-#include "../common/Protocol.h"
+#include "../common/protocol.h"
 
 #include <cstring>
 

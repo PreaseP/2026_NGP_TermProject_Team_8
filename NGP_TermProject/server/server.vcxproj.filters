@@ -30,7 +30,7 @@
     <ClInclude Include="NetSession.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\Protocol.h">
+    <ClInclude Include="..\common\protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
