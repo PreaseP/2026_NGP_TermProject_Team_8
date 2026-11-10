@@ -25,4 +25,8 @@ public:
     void OnConnected(int sessionId);
     void OnDisconnected(int sessionId);
     void OnPacket(int sessionId, const unsigned char* data, int size); // 클라이언트 패킷 검증 및 처리
+    void HandleLogin(GameSession* session, const C2S_Login& packet); // 로그인 검증 및 결과 전송
+    void HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet); // 방 입장 요청 처리
+    void LeaveRoomInternal(GameSession* session); // 방 퇴장 처리
+    GameSession* FindGameSession(int sessionId); // 연결 번호로 게임 세션 찾기
 };
