@@ -70,6 +70,12 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+    <VcpkgInstalledDir Condition="'$(VcpkgInstalledDir)' == ''">$(ProjectDir)vcpkg_installed\</VcpkgInstalledDir>
+    <ClientVcpkgMsbuildDir Condition="'$(VcpkgPropsImported)' != 'true'">$(VSInstallDir)VC\vcpkg\scripts\buildsystems\msbuild\</ClientVcpkgMsbuildDir>
+  </PropertyGroup>
+  <Import Project="$(ClientVcpkgMsbuildDir)vcpkg.props" Condition="'$(ClientVcpkgMsbuildDir)' != '' and Exists('$(ClientVcpkgMsbuildDir)vcpkg.props')" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -164,31 +170,22 @@
   <PropertyGroup>
     <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Platform)'=='x64'">
-    <OpenGLRoot>$(ProjectDir)..\external\vcpkg_installed\x64-windows\</OpenGLRoot>
-    <OpenGLConfigDir Condition="'$(Configuration)'=='Debug'">debug\</OpenGLConfigDir>
-    <GlewLibrary Condition="'$(Configuration)'=='Debug'">glew32d.lib</GlewLibrary>
-    <GlewLibrary Condition="'$(Configuration)'!='Debug'">glew32.lib</GlewLibrary>
-    <FreeglutLibrary Condition="'$(Configuration)'=='Debug'">freeglutd.lib</FreeglutLibrary>
-    <FreeglutLibrary Condition="'$(Configuration)'!='Debug'">freeglut.lib</FreeglutLibrary>
-    <VcpkgEnabled>false</VcpkgEnabled>
-  </PropertyGroup>
-  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
+  <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\external;$(ProjectDir)..\external\compat\include;$(OpenGLRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\external;$(ProjectDir)..\external\compat\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalOptions>
-      </AdditionalOptions>
-      <AdditionalLibraryDirectories>$(OpenGLRoot)$(OpenGLConfigDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>$(GlewLibrary);$(FreeglutLibrary);opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <Target Name="CopyGameRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'">
+  <Target Name="CheckClientVcpkg" BeforeTargets="PrepareForBuild" Condition="'$(VcpkgPropsImported)' != 'true'">
+    <Error Text="Install the vcpkg package manager component in Visual Studio Installer to restore the client dependencies." />
+  </Target>
+  <Target Name="CopyGameAssets" AfterTargets="Build">
     <ItemGroup>
-      <GameRuntime Include="$(OpenGLRoot)$(OpenGLConfigDir)bin\*.dll;$(ProjectDir)*.png;$(ProjectDir)*.glsl" />
+      <GameAssets Include="$(ProjectDir)*.png;$(ProjectDir)*.glsl" />
     </ItemGroup>
-    <Copy SourceFiles="@(GameRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(GameAssets)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
   <ItemGroup>
     <None Include="cgproj.cpp" />
@@ -206,5 +203,7 @@
     <ClInclude Include="..\common\protocol.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(ClientVcpkgMsbuildDir)vcpkg.targets" Condition="'$(ClientVcpkgMsbuildDir)' != '' and '$(VcpkgPropsImported)' == 'true'" />
+  </ImportGroup>
 </Project>

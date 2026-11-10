@@ -429,3 +429,4 @@ FodyWeavers.xsd
 
 # Local OpenGL SDK
 NGP_TermProject/external/vcpkg_installed/
+/NGP_TermProject/client/vcpkg_installed/
