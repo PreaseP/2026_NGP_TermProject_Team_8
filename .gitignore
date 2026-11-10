@@ -426,3 +426,7 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# Local OpenGL SDK
+NGP_TermProject/external/vcpkg_installed/
+/NGP_TermProject/client/vcpkg_installed/
