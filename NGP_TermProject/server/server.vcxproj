@@ -134,6 +134,7 @@
     <ClInclude Include="ThreadQueue.h" />
     <ClCompile Include="..\common\Common.cpp" />
     <ClCompile Include="GameServer.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="NetSession.cpp" />
     <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="PlayerState.cpp" />

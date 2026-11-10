@@ -22,4 +22,5 @@ public:
 	NET_RESULT ReceivePackets(RecvEventQueue* recvQueue, bool readSocket);
 	bool QueueSendData(const unsigned char* data, int size);
 	NET_RESULT FlushSendBuffer();
+	short GetPollEvents() const;
 };

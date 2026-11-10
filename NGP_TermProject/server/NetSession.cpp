@@ -123,3 +123,12 @@ NET_RESULT NetSession::FlushSendBuffer()
 	sendOffset = 0;
 	return closeAfterSend ? NET_CLOSED : NET_OK;
 }
+
+short NetSession::GetPollEvents() const
+{
+	short events = recvStalled ? 0 : POLLRDNORM;
+	if (sendSize > sendOffset) {
+		events |= POLLWRNORM;
+	}
+	return events;
+}
