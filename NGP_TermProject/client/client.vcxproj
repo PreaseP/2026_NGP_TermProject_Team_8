@@ -29,26 +29,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -122,23 +122,89 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-<ItemGroup><ClCompile Include="Alex_Camera.cpp" /><ClCompile Include="Block.cpp" /><ClCompile Include="Camera.cpp" /><ClCompile Include="finish.cpp" /><ClCompile Include="KeyManager.cpp" /><ClCompile Include="Light.cpp" /><ClCompile Include="Main.cpp" /><ClCompile Include="Ground.cpp" /><ClCompile Include="Map.cpp" /><ClCompile Include="Snow.cpp" /><ClCompile Include="Snowball.cpp" /><ClCompile Include="Steve_Camera.cpp" /><ClCompile Include="title.cpp" /><ClCompile Include="Wall.cpp" /></ItemGroup>
-<ItemGroup><ClInclude Include="Alex.h" /><ClInclude Include="Alex_Camera.h" /><ClInclude Include="Block.h" /><ClInclude Include="Camera.h" /><ClInclude Include="Character.h" /><ClInclude Include="finish.h" /><ClInclude Include="Ground.h" /><ClInclude Include="KeyManager.h" /><ClInclude Include="Light.h" /><ClInclude Include="Map.h" /><ClInclude Include="Snow.h" /><ClInclude Include="Snowball.h" /><ClInclude Include="stb_image.h" /><ClInclude Include="Steve.h" /><ClInclude Include="Steve_Camera.h" /><ClInclude Include="title.h" /><ClInclude Include="Wall.h" /></ItemGroup>
-<ItemGroup><None Include="fragment.glsl" /><None Include="vertex.glsl" /></ItemGroup>
-<PropertyGroup><LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory></PropertyGroup>
-<PropertyGroup Condition="'$(Platform)'=='x64'"><OpenGLRoot>$(ProjectDir)..\external\vcpkg_installed\x64-windows\</OpenGLRoot><OpenGLConfigDir Condition="'$(Configuration)'=='Debug'">debug\</OpenGLConfigDir><GlewLibrary Condition="'$(Configuration)'=='Debug'">glew32d.lib</GlewLibrary><GlewLibrary Condition="'$(Configuration)'!='Debug'">glew32.lib</GlewLibrary><FreeglutLibrary Condition="'$(Configuration)'=='Debug'">freeglutd.lib</FreeglutLibrary><FreeglutLibrary Condition="'$(Configuration)'!='Debug'">freeglut.lib</FreeglutLibrary><VcpkgEnabled>false</VcpkgEnabled></PropertyGroup>
-<ItemDefinitionGroup Condition="'$(Platform)'=='x64'"><ClCompile><AdditionalIncludeDirectories>$(ProjectDir)..\external\compat\include;$(OpenGLRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile><Link><AdditionalOptions></AdditionalOptions><AdditionalLibraryDirectories>$(OpenGLRoot)$(OpenGLConfigDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories><AdditionalDependencies>$(GlewLibrary);$(FreeglutLibrary);opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link></ItemDefinitionGroup>
-<Target Name="CopyGameRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'"><ItemGroup><GameRuntime Include="$(OpenGLRoot)$(OpenGLConfigDir)bin\*.dll;$(ProjectDir)*.png;$(ProjectDir)*.glsl" /></ItemGroup><Copy SourceFiles="@(GameRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" /></Target>
-<ItemGroup><None Include="cgproj.cpp" /><Image Include="*.png" /></ItemGroup>
-<ItemGroup>
-  <ClCompile Include="NetworkClient.cpp" />
-  <ClInclude Include="NetworkClient.h" />
-  <ClCompile Include="GameClient.cpp" />
-  <ClInclude Include="GameClient.h" />
-  <ClCompile Include="InputHandler.cpp" />
-  <ClInclude Include="InputHandler.h" />
-  <ClCompile Include="..\common\Common.cpp" />
-  <ClInclude Include="..\common\Common.h" />
-  <ClInclude Include="..\common\protocol.h" />
-</ItemGroup>
-<Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" /><ImportGroup Label="ExtensionTargets" /></Project>
+  <ItemGroup>
+    <ClCompile Include="Alex_Camera.cpp" />
+    <ClCompile Include="Block.cpp" />
+    <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="finish.cpp" />
+    <ClCompile Include="KeyManager.cpp" />
+    <ClCompile Include="Light.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Ground.cpp" />
+    <ClCompile Include="Map.cpp" />
+    <ClCompile Include="Snow.cpp" />
+    <ClCompile Include="Snowball.cpp" />
+    <ClCompile Include="Steve_Camera.cpp" />
+    <ClCompile Include="title.cpp" />
+    <ClCompile Include="Wall.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Alex.h" />
+    <ClInclude Include="Alex_Camera.h" />
+    <ClInclude Include="Block.h" />
+    <ClInclude Include="Camera.h" />
+    <ClInclude Include="Character.h" />
+    <ClInclude Include="finish.h" />
+    <ClInclude Include="Ground.h" />
+    <ClInclude Include="KeyManager.h" />
+    <ClInclude Include="Light.h" />
+    <ClInclude Include="Map.h" />
+    <ClInclude Include="Snow.h" />
+    <ClInclude Include="Snowball.h" />
+    <ClInclude Include="stb_image.h" />
+    <ClInclude Include="Steve.h" />
+    <ClInclude Include="Steve_Camera.h" />
+    <ClInclude Include="title.h" />
+    <ClInclude Include="Wall.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="fragment.glsl" />
+    <None Include="vertex.glsl" />
+  </ItemGroup>
+  <PropertyGroup>
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='x64'">
+    <OpenGLRoot>$(ProjectDir)..\external\vcpkg_installed\x64-windows\</OpenGLRoot>
+    <OpenGLConfigDir Condition="'$(Configuration)'=='Debug'">debug\</OpenGLConfigDir>
+    <GlewLibrary Condition="'$(Configuration)'=='Debug'">glew32d.lib</GlewLibrary>
+    <GlewLibrary Condition="'$(Configuration)'!='Debug'">glew32.lib</GlewLibrary>
+    <FreeglutLibrary Condition="'$(Configuration)'=='Debug'">freeglutd.lib</FreeglutLibrary>
+    <FreeglutLibrary Condition="'$(Configuration)'!='Debug'">freeglut.lib</FreeglutLibrary>
+    <VcpkgEnabled>false</VcpkgEnabled>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\external;$(ProjectDir)..\external\compat\include;$(OpenGLRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalOptions>
+      </AdditionalOptions>
+      <AdditionalLibraryDirectories>$(OpenGLRoot)$(OpenGLConfigDir)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(GlewLibrary);$(FreeglutLibrary);opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="CopyGameRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'">
+    <ItemGroup>
+      <GameRuntime Include="$(OpenGLRoot)$(OpenGLConfigDir)bin\*.dll;$(ProjectDir)*.png;$(ProjectDir)*.glsl" />
+    </ItemGroup>
+    <Copy SourceFiles="@(GameRuntime)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <ItemGroup>
+    <None Include="cgproj.cpp" />
+    <Image Include="*.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="NetworkClient.cpp" />
+    <ClInclude Include="NetworkClient.h" />
+    <ClCompile Include="GameClient.cpp" />
+    <ClInclude Include="GameClient.h" />
+    <ClCompile Include="InputHandler.cpp" />
+    <ClInclude Include="InputHandler.h" />
+    <ClCompile Include="..\common\Common.cpp" />
+    <ClInclude Include="..\common\Common.h" />
+    <ClInclude Include="..\common\protocol.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>
