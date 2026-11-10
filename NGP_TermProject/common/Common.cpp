@@ -2,26 +2,20 @@
 
 #pragma comment(lib, "ws2_32.lib")
 
-bool NetUtil::SetNonBlocking(SOCKET sock)
-{
-	u_long nonBlocking = 1;
-	return ioctlsocket(sock, FIONBIO, &nonBlocking) == 0;
-}
-
-bool NetUtil::SetNoDelay(SOCKET sock)
-{
-	const int enabled = 1;
-	return setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-		reinterpret_cast<const char*>(&enabled), sizeof(enabled)) == 0;
-}
-
 bool NetUtil::ConfigureSocket(SOCKET sock, bool noDelay)
 {
-	if (!SetNonBlocking(sock)) {
+	u_long nonBlocking = 1;
+	if (ioctlsocket(sock, FIONBIO, &nonBlocking) != 0) {
 		return false;
 	}
 
-	return !noDelay || SetNoDelay(sock);
+	if (!noDelay) {
+		return true;
+	}
+
+	const int enabled = 1;
+	return setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+		reinterpret_cast<const char*>(&enabled), sizeof(enabled)) == 0;
 }
 
 bool Inventory::Add(ITEM_TYPE item)

@@ -3,11 +3,14 @@
 #include <winsock2.h>
 #include <vector>
 
-// 상수(SERVER_PORT, MAX_*, BUF_SIZE, OBJ_ID_* 등)와 패킷 정의는 protocol.h에 있다.
 #include "protocol.h"
 
 constexpr int TICK_MS = 33;
 constexpr unsigned char MOVE_KEY_MASK = KEY_FORWARD | KEY_BACK | KEY_LEFT | KEY_RIGHT;
+
+using PacketBytes = std::vector<unsigned char>;
+
+constexpr int INVALID_ID = -1;
 
 enum NET_RESULT
 {
@@ -16,14 +19,10 @@ enum NET_RESULT
 	NET_CLOSED,
 	NET_ERROR
 };
-using PacketBytes = std::vector<unsigned char>;
 
-constexpr int INVALID_ID = -1;
 
 class NetUtil {
 public:
-	static bool SetNonBlocking(SOCKET sock);
-	static bool SetNoDelay(SOCKET sock);
 	static bool ConfigureSocket(SOCKET sock, bool noDelay); // 넌블로킹과 TCP_NODELAY 설정
 };
 
