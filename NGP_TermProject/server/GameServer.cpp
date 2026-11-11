@@ -88,7 +88,6 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
     if (expectedSize == 0 || header->size != size || size != expectedSize)
         return;
 
-    // 로그인 전에는 로그인 요청만 받는다.
     if (!session->loggedIn && header->type != C2S_LOGIN)
         return;
 
@@ -103,7 +102,91 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         LeaveRoomInternal(session);
         break;
     default:
-        // 캐릭터 선택, 게임 시작, 이동, 차징, 던지기, 아이템 사용은 해당 일정에서 연결한다.
         break;
     }
+}
+
+void GameServer::HandleLogin(GameSession* session, const C2S_Login& packet)
+{
+    if (session->loggedIn)
+        return;
+
+    // 정원이 차면 실패 응답 후 연결을 끊는다.
+    if (loggedInCount >= MAX_LOGIN_USERS) {
+        SendLoginFailAndClose(session->sessionId, LOGIN_SERVER_FULL);
+        return;
+    }
+
+    // 클라이언트가 보낸 이름은 널 문자로 끝나지 않을 수 있어 복사해서 끝을 막는다.
+    char name[MAX_NAME_LEN];
+    memcpy(name, packet.name, MAX_NAME_LEN);
+    name[MAX_NAME_LEN - 1] = '\0';
+
+    S2C_LoginResult result{};
+    result.size = sizeof(result);
+    result.type = S2C_LOGIN_RESULT;
+    result.session_id = session->sessionId;
+
+    // 이름이 잘못되면 연결은 유지해서 다시 입력할 수 있게 한다.
+    if (!IsValidName(name)) {
+        result.result = LOGIN_INVALID_NAME;
+        SendPacket(session->sessionId, &result);
+        return;
+    }
+
+    memcpy(session->name, name, MAX_NAME_LEN);
+    session->loggedIn = true;
+    ++loggedInCount;
+
+    result.result = LOGIN_OK;
+    SendPacket(session->sessionId, &result);
+    SendRoomList(session->sessionId);
+}
+
+void GameServer::HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet)
+{
+    // 이미 방에 있으면 새 입장 요청은 무시한다.
+    if (session->roomId != INVALID_ID)
+        return;
+
+    S2C_JoinRoomResult result{};
+    result.size = sizeof(result);
+    result.type = S2C_JOIN_ROOM_RESULT;
+    result.room_id = packet.room_id;
+    result.my_slot = 0;
+
+    int slot = INVALID_ID;
+    if (packet.room_id >= MAX_ROOMS) {
+        result.result = JOIN_INVALID_ROOM;
+    }
+    else {
+        Room& room = rooms[packet.room_id];
+        if (room.state != ROOM_WAITING) {
+            result.result = JOIN_ROOM_PLAYING;
+        }
+        else if (room.GetPlayerCount() >= MAX_ROOM_PLAYERS) {
+            result.result = JOIN_ROOM_FULL;
+        }
+        else {
+            slot = room.AddPlayer(session->sessionId);
+            result.result = (slot == INVALID_ID) ? JOIN_ROOM_FULL : JOIN_OK;
+        }
+    }
+
+    if (result.result != JOIN_OK) {
+        SendPacket(session->sessionId, &result);
+        return;
+    }
+
+    session->roomId = packet.room_id;
+    session->slot = slot;
+    result.my_slot = static_cast<unsigned char>(slot);
+    SendPacket(session->sessionId, &result);
+
+    // 방 안 사람에게는 방 정보를, 로비에 남은 사람에게는 바뀐 방 목록을 보낸다.
+    rooms[packet.room_id].SendRoomInfo();
+
+    S2C_RoomList roomList{};
+    BuildRoomList(&roomList);
+    SendToLobby(&roomList);
 }

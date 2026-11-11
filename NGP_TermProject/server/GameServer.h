@@ -5,6 +5,8 @@
 #include "Room.h"
 #include <windows.h>
 
+constexpr int MAX_LOGIN_USERS = 12;
+
 struct ServerContext {
     RecvEventQueue*    recvQueue = nullptr;
     SendRequestQueue*  sendQueue = nullptr;
@@ -29,4 +31,10 @@ public:
     void HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet); // 방 입장 요청 처리
     void LeaveRoomInternal(GameSession* session); // 방 퇴장 처리
     GameSession* FindGameSession(int sessionId); // 연결 번호로 게임 세션 찾기
+    bool IsValidName(const char* name);
+    void SendPacket(int sessionId, const void* packet);
+    void SendToLobby(const void* packet);
+    void SendRoomList(int sessionId);
+    void BuildRoomList(S2C_RoomList* out);
+    void SendLoginFailAndClose(int sessionId, LOGIN_RESULT result);
 };

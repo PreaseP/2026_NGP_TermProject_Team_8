@@ -23,4 +23,7 @@ public:
     GameServer*    server = nullptr;
 
     void Init(int roomId, GameServer* server); // 빈 대기실 초기화
+    int AddPlayer(int sessionId);
+    int GetPlayerCount() const; // 방 인원수 확인
+    void SendRoomInfo() const; // 방 정보 전송
 };
