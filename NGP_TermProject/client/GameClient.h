@@ -11,6 +11,12 @@ class GameClient {
 public:
     const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
+    int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
+    // [11.10] 목록 순서로 방을 조회한다. 범위를 벗어나면 nullptr을 반환한다.
+    const RoomSummary* GetRoom(int index) const {
+        if (index < 0 || index >= roomCount) return nullptr;
+        return &rooms[index];
+    }
     // [11.7] 닉네임 오류가 나면 화면에 효과를 한 번 요청한다.
     bool ConsumeNameError() {
         const bool occurred = nameErrorEffect;
@@ -36,6 +42,8 @@ private:
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
+    RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
+    int roomCount = 0; // [11.10]
     std::string serverIp; // 접속할 서버의 IP 주소
     std::string errorMessage; //실패한 이유를 적어 둘 문자열
     bool nameErrorEffect = false; // [11.7] 아직 화면에 알리지 않은 닉네임 오류

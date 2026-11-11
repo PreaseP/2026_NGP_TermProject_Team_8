@@ -29,6 +29,11 @@ bool GameClient::Init(const char* ip)
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    // [11.10] 시작할 때 방 목록을 비움
+    for (RoomSummary& room : rooms) {
+        room = {};
+    }
+    roomCount = 0;
     inputHandler.Reset(); // [11.6] 시작할 때 이전 이동·공격 입력 기록을 비운다.
     nameErrorEffect = false; // [11.7] 이전 닉네임 오류 효과를 비운다.
     errorMessage.clear(); // 초기화에 성공했으므로 이전 오류 메시지를 지운다.
@@ -72,6 +77,11 @@ void GameClient::HandleDisconnect()
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    // [11.10] 연결이 끊기면 이전 서버의 방 목록을 비운다.
+    for (RoomSummary& room : rooms) {
+        room = {};
+    }
+    roomCount = 0;
     inputHandler = InputHandler{this}; // [11.9] 닉네임과 이동·공격 입력을 모두 비운다.
     nameErrorEffect = false;
     errorMessage = "Connection lost. Enter your nickname and press GAME START.";
@@ -251,5 +261,33 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         else {
             HandleDisconnect(); // [11.9] 오류 ( 로그인 응답 값이 잘못됨 )
         }
+    }
+
+    // [11.10] 로비에서 받은 방 목록을 검사하고 저장한다.
+    if (packet[1] == S2C_ROOM_LIST && currentState == CLIENT_LOBBY) {
+        S2C_RoomList roomList{};
+        std::memcpy(&roomList, packet, sizeof(roomList));
+        if (roomList.room_count > MAX_ROOMS) {
+            HandleDisconnect(); // [11.10] 저장할 수 있는 방 수를 넘었다.
+            return;
+        }
+
+        RoomSummary newRooms[MAX_ROOMS]{};
+        bool seenRooms[MAX_ROOMS]{}; // [11.10] 같은 방 번호가 두 번 오는지 확인한다.
+        for (int i = 0; i < roomList.room_count; ++i) {
+            const RoomSummary& room = roomList.rooms[i];
+            if (room.room_id >= MAX_ROOMS || seenRooms[room.room_id] ||
+                room.player_count > MAX_ROOM_PLAYERS ||
+                (room.state != ROOM_WAITING && room.state != ROOM_PLAYING && room.state != ROOM_RESULT)) {
+                HandleDisconnect(); // [11.10] 방 번호·인원·상태가 잘못됐다.
+                return;
+            }
+            seenRooms[room.room_id] = true;
+            newRooms[i] = room;
+        }
+
+        // [11.10] 모든 검사가 끝나면 이전 목록을 한 번에 바꾼다.
+        std::memcpy(rooms, newRooms, sizeof(rooms));
+        roomCount = roomList.room_count;
     }
 }
