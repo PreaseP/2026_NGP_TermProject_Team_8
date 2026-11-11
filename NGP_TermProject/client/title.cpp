@@ -15,6 +15,10 @@ void TitleScreen::initialize() {
 
     initializeBuffers();
     loadTitleTexture();
+    // [11.10] 로비 배경, 방 버튼, 제목 이미지를 준비한다.
+    loadLobbyTexture("Images/Lobby/Lobby_background.png", lobbyBackgroundTextureId);
+    loadLobbyTexture("Images/Lobby/lobby_roombutton.png", lobbyRoomButtonTextureId);
+    loadLobbyTexture("Images/Lobby/lobby_text.png", lobbyTextTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -84,6 +88,27 @@ void TitleScreen::loadTitleTexture() {
 
     textureLoaded = true;
     std::cout << "Title.png 텍스처 로드 성공: " << width << "x" << height << " (" << channels << " channels)" << std::endl;
+}
+
+// [11.10] PNG 파일을 읽어 화면에서 사용할 텍스처로 만든다.
+void TitleScreen::loadLobbyTexture(const char* path, GLuint& textureId) {
+    int width = 0, height = 0, channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
+    if (!pixels) {
+        std::cerr << "Failed to load lobby image: " << path << std::endl;
+        return;
+    }
+
+    glGenTextures(1, &textureId);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
 }
 
 void TitleScreen::render(GLuint shaderProgram) const {
@@ -159,6 +184,19 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 }
 
 void TitleScreen::cleanup() {
+    // [11.10] 로비 텍스처를 지우고 번호를 0으로 비운다.
+    if (lobbyBackgroundTextureId != 0) {
+        glDeleteTextures(1, &lobbyBackgroundTextureId);
+        lobbyBackgroundTextureId = 0;
+    }
+    if (lobbyRoomButtonTextureId != 0) {
+        glDeleteTextures(1, &lobbyRoomButtonTextureId);
+        lobbyRoomButtonTextureId = 0;
+    }
+    if (lobbyTextTextureId != 0) {
+        glDeleteTextures(1, &lobbyTextTextureId);
+        lobbyTextTextureId = 0;
+    }
     if (fontTextureId != 0) { glDeleteTextures(1, &fontTextureId); fontTextureId = 0; } // [11.7]
     if (startTextureId != 0) { glDeleteTextures(1, &startTextureId); startTextureId = 0; } // [11.7]
     if (isInitialized) {

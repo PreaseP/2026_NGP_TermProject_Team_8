@@ -29,6 +29,7 @@ private:
     void renderText(const std::string& text, float x, float y, float scale) const;
     void loadTitleTexture();
     void loadStartTexture(); // [11.7] 투명 PNG 버튼을 불러온다.
+    void loadLobbyTexture(const char* path, GLuint& textureId); // [11.10] 로비 PNG를 텍스처로 준비한다.
     void loadFontTexture(); // [11.7] 글자도 같은 셰이더로 그리도록 텍스처로 준비한다.
     void drawUIQuad(GLuint shader, float x, float y, float w, float h,
         GLuint texture, const glm::vec4& color, const glm::vec4& uv = glm::vec4(0, 0, 1, 1)) const;
@@ -50,5 +51,8 @@ private:
     bool isInitialized;
 
     GLuint titleTextureId = 0;
+    GLuint lobbyBackgroundTextureId = 0; // [11.10] 로비 배경
+    GLuint lobbyRoomButtonTextureId = 0; // [11.10] 방 버튼
+    GLuint lobbyTextTextureId = 0; // [11.10] 로비 제목
     bool textureLoaded = false;
 };
