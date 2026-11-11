@@ -838,7 +838,12 @@ GLvoid drawScene()
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
-	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) {
+	if (gameClient.GetState() == CLIENT_LOBBY) { // [11.10] 로그인 성공 후 로비 이미지를 그린다.
+		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount());
+		glutSwapBuffers();
+		return;
+	}
+	if (gameClient.GetState() == CLIENT_LOGIN) {
 		// [11.7] 닉네임 오류가 발생한 프레임에만 버튼 효과를 시작한다.
 		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
 		titleScreen.render(shaderProgramID);

@@ -1,4 +1,5 @@
 #include "title.h"
+#include "../common/protocol.h" // [11.10] 방 정보와 상태 종류
 #include <vector>
 #include <iostream>
 
@@ -427,6 +428,83 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     // [11.7] 다음 배경·게임 출력에는 기존 셰이더 동작을 사용한다.
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
     glBindVertexArray(0); glBindTexture(GL_TEXTURE_2D, 0);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+}
+
+// [11.10] 기존 셰이더와 사각형 그리기로 로비 이미지를 배치한다.
+void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomCount) const {
+    if (!isInitialized) return;
+
+    // [11.10] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
+    const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glUseProgram(shader);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glActiveTexture(GL_TEXTURE0);
+    glm::mat4 view(1.0f);
+    glm::mat4 projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
+
+    // [11.10] 배경 위에 제목과 세 칸의 방 버튼 이미지를 그린다.
+    const glm::vec4 white(1.0f);
+    if (lobbyBackgroundTextureId != 0) {
+        drawUIQuad(shader, 0, 0, 1200, 675, lobbyBackgroundTextureId, white);
+    }
+    else {
+        panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
+    }
+    if (lobbyTextTextureId != 0) {
+        drawUIQuad(shader, 330, 30.08f, 540, 181.44f, lobbyTextTextureId, white);
+    }
+    else {
+        centeredText(shader, "LOBBY", 145, 1, 1, 1, 28.8f);
+    }
+    // [11.10] 세 방 버튼의 중심 위치를 유지하며 원래 크기의 약 73.1%로 그린다.
+    // [11.10] 목록이 비어 있으면 현재 표시할 방이 없음을 알려 준다.
+    if (rooms == nullptr || roomCount <= 0) {
+        centeredText(shader, "No rooms available", 360, 1, 1, 1, 22.0f);
+    }
+    for (int i = 0; rooms != nullptr && i < roomCount && i < MAX_ROOMS; ++i) {
+        const float y = 170.0f + i * 145.0f;
+        if (lobbyRoomButtonTextureId != 0) {
+            drawUIQuad(shader, 325.865f, y + 33.62f, 548.27f, 182.76f, lobbyRoomButtonTextureId, white);
+        }
+        else {
+            panel(shader, 347.795f, y + 72.485f, 504.41f, 95.03f, 0.1f, 0.15f, 0.2f, 0.9f);
+        }
+
+        // [11.10] 서버에서 받은 방 번호, 인원, 상태를 버튼 중앙에 표시한다.
+        const RoomSummary& room = rooms[i];
+        const char* stateText = "Unknown";
+        switch (room.state) {
+        case ROOM_WAITING: stateText = "Waiting"; break;
+        case ROOM_PLAYING: stateText = "Playing"; break;
+        case ROOM_RESULT: stateText = "Result"; break;
+        }
+        const std::string roomText = "Room " + std::to_string(room.room_id) + "    " +
+            std::to_string(room.player_count) + "/" + std::to_string(MAX_ROOM_PLAYERS) + "    " + stateText;
+        centeredText(shader, roomText, y + 132.0f, 1, 1, 1, 22.0f);
+    }
+
+    // [11.10] 로비를 그리기 전의 깊이·투명도 설정으로 돌린다.
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
     if (depthEnabled) glEnable(GL_DEPTH_TEST);
     if (cullEnabled) glEnable(GL_CULL_FACE);
     if (!blendEnabled) glDisable(GL_BLEND);
