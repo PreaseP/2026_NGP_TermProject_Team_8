@@ -143,6 +143,35 @@ bool GameClient::RequestLogin(const char* name)
     return true;
 }
 
+// [11.11] 호출자는 요청 종류(type)와 내용을 채운다. 실제 송신은 PollNetwork에서 한다.
+bool GameClient::QueueRequest(const void* packet, int packetSize)
+{
+    if (currentState == CLIENT_LOGIN) {
+        errorMessage = "Log in before sending requests.";
+        return false;
+    }
+    // [11.11] size와 type으로 최소 2바이트가 필요하고, size는 최대 255다.
+    if (packet == nullptr || packetSize < 2 || packetSize > 255) {
+        errorMessage = "Invalid request size.";
+        return false;
+    }
+
+    unsigned char request[BUF_SIZE]{};
+    std::memcpy(request, packet, packetSize);
+    if (request[1] < C2S_JOIN_ROOM || request[1] > C2S_USE_ITEM) {
+        errorMessage = "Invalid request type.";
+        return false;
+    }
+
+    request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
+    if (!network.QueuePacket(request)) {
+        HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.
+        return false;
+    }
+    errorMessage.clear();
+    return true; // [11.11] 송신 버퍼에 등록한 상태다.
+}
+
 // [11.5]
 void GameClient::PollNetwork()
 {

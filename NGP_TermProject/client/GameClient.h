@@ -28,6 +28,8 @@ public:
     bool TryConnect(); //서버 IP로 연결을 시도하고 성공 여부를 알려 준다.
     void Tick(); // [11.6] 주기적으로 클라이언트 처리를 진행한다.
     bool RequestLogin(const char* name); // [11.6] 닉네임을 검사하고 로그인 요청을 버퍼에 넣는다.
+    // [11.11] 요청 데이터의 주소와 크기를 받아 송신 버퍼에 등록한다.
+    bool QueueRequest(const void* packet, int packetSize);
     void PollNetwork(); // [11.5] 쌓인 데이터를 보내고 도착한 데이터를 받는다.
     CLIENT_STATE GetState() const { return currentState; } // [11.6] 입력 처리기가 현재 상태를 확인한다.
     void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
