@@ -505,12 +505,12 @@ void initializeGame() {
 void Keyboard(unsigned char key, int x, int y)
 {
 	// [11.6]
-	if (gameClient.GetState() == CLIENT_LOGIN) {
+	// [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
+	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) { // [11.11] Enter 입력 전달
 		gameClient.OnKeyDown(key);
 		glutPostRedisplay();
 		return;
 	}
-	if (gameClient.GetState() == CLIENT_LOBBY) return; // [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		GameState newState = titleScreen.handleKeyInput(key);
@@ -701,6 +701,14 @@ void checkAllSnowballCollisions()
 
 void SpecialKeyboard(int key, int x, int y)
 {
+	// [11.11] 로비에서는 위·아래 방향키로 방 선택만 바꾼다.
+	if (gameClient.GetState() == CLIENT_LOBBY) {
+		if (key == GLUT_KEY_UP) gameClient.MoveRoomSelection(-1);
+		else if (key == GLUT_KEY_DOWN) gameClient.MoveRoomSelection(1);
+		glutPostRedisplay();
+		return;
+	}
+
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}
@@ -839,7 +847,9 @@ GLvoid drawScene()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
 	if (gameClient.GetState() == CLIENT_LOBBY) { // [11.10] 로그인 성공 후 로비 이미지를 그린다.
-		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount());
+		// [11.11] 현재 선택 위치를 화면에도 전달한다.
+		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount(),
+			gameClient.GetSelectedRoomIndex());
 		glutSwapBuffers();
 		return;
 	}

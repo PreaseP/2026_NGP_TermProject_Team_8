@@ -19,7 +19,8 @@ public:
 
     void initialize();
     void render(GLuint shaderProgram) const;
-    void renderLobby(GLuint shaderProgram, const RoomSummary* rooms, int roomCount) const; // [11.10] 로비 이미지와 방 정보를 그린다.
+    void renderLobby(GLuint shaderProgram, const RoomSummary* rooms, int roomCount,
+        int selectedRoomIndex) const; // [11.10] 로비 이미지와 방 정보를 그린다. [11.11] 선택 위치도 받는다.
     GameState handleKeyInput(unsigned char key) const;
     void cleanup();
     // [11.7] 로그인 입력·버튼과 로그인 성공 후 로비 안내를 그린다.

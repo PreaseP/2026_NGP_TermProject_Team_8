@@ -12,6 +12,8 @@ public:
     const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
     int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
+    int GetSelectedRoomIndex() const { return selectedRoomIndex; } // [11.11] 현재 선택한 목록 위치
+    void MoveRoomSelection(int direction); // [11.11] -1은 위, 1은 아래로 방 선택 이동
     // [11.10] 목록 순서로 방을 조회한다. 범위를 벗어나면 nullptr을 반환한다.
     const RoomSummary* GetRoom(int index) const {
         if (index < 0 || index >= roomCount) return nullptr;
@@ -46,6 +48,7 @@ private:
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
+    int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.
     std::string serverIp; // 접속할 서버의 IP 주소
     std::string errorMessage; //실패한 이유를 적어 둘 문자열
     bool nameErrorEffect = false; // [11.7] 아직 화면에 알리지 않은 닉네임 오류

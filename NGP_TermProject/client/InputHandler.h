@@ -10,6 +10,7 @@ public:
     const char* GetName() const { return nameBuffer; } // [11.7] 화면에 입력 중인 닉네임을 보여 준다.
     // [11.6] 입력으로 만든 요청을 전달할 GameClient를 기억한다.
     explicit InputHandler(GameClient* target) : game(target) {}
+    // [11.11] 로비에서는 Enter로 현재 선택한 방의 입장을 요청한다.
     void OnKeyDown(unsigned char key); // [11.6] 로그인 화면의 닉네임 입력을 처리한다.
     void Reset(); // [11.6] 이전 이동 기록과 공격 버튼 상태를 비운다.
 

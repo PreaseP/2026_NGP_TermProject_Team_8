@@ -34,6 +34,7 @@ bool GameClient::Init(const char* ip)
         room = {};
     }
     roomCount = 0;
+    selectedRoomIndex = 0; // [11.11] 첫 번째 방부터 선택한다.
     inputHandler.Reset(); // [11.6] 시작할 때 이전 이동·공격 입력 기록을 비운다.
     nameErrorEffect = false; // [11.7] 이전 닉네임 오류 효과를 비운다.
     errorMessage.clear(); // 초기화에 성공했으므로 이전 오류 메시지를 지운다.
@@ -82,6 +83,7 @@ void GameClient::HandleDisconnect()
         room = {};
     }
     roomCount = 0;
+    selectedRoomIndex = 0; // [11.11] 이전 방 선택도 비운다.
     inputHandler = InputHandler{this}; // [11.9] 닉네임과 이동·공격 입력을 모두 비운다.
     nameErrorEffect = false;
     errorMessage = "Connection lost. Enter your nickname and press GAME START.";
@@ -141,6 +143,18 @@ bool GameClient::RequestLogin(const char* name)
     }
     errorMessage.clear();
     return true;
+}
+
+// [11.11] 방향키로 선택 위치만 바꾼다. 끝에 도달하면 현재 선택을 유지한다.
+void GameClient::MoveRoomSelection(int direction)
+{
+    if (currentState != CLIENT_LOBBY) return;
+    if (direction != -1 && direction != 1) return;
+
+    const int nextIndex = selectedRoomIndex + direction;
+    if (nextIndex >= 0 && nextIndex < roomCount) {
+        selectedRoomIndex = nextIndex;
+    }
 }
 
 // [11.11] 호출자는 요청 종류(type)와 내용을 채운다. 실제 송신은 PollNetwork에서 한다.
@@ -277,6 +291,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         if (result.result == LOGIN_OK && result.session_id >= 0) {
             mySessionId = result.session_id;
             currentState = CLIENT_LOBBY;
+            selectedRoomIndex = 0; // [11.11] 로그인 후 첫 번째 방을 선택한다.
             inputHandler.Reset();
             errorMessage.clear();
         }
@@ -302,6 +317,8 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         }
 
         RoomSummary newRooms[MAX_ROOMS]{};
+        const RoomSummary* selectedRoom = GetRoom(selectedRoomIndex); // [11.11] 갱신 전 선택한 방
+        int newSelectedIndex = 0; // [11.11] 선택한 방이 사라지면 첫 번째 방으로 돌아간다.
         bool seenRooms[MAX_ROOMS]{}; // [11.10] 같은 방 번호가 두 번 오는지 확인한다.
         for (int i = 0; i < roomList.room_count; ++i) {
             const RoomSummary& room = roomList.rooms[i];
@@ -313,10 +330,14 @@ void GameClient::ProcessPacket(const unsigned char* packet)
             }
             seenRooms[room.room_id] = true;
             newRooms[i] = room;
+            if (selectedRoom != nullptr && selectedRoom->room_id == room.room_id) {
+                newSelectedIndex = i; // [11.11] 목록 순서가 바뀌어도 같은 방을 선택한다.
+            }
         }
 
         // [11.10] 모든 검사가 끝나면 이전 목록을 한 번에 바꾼다.
         std::memcpy(rooms, newRooms, sizeof(rooms));
         roomCount = roomList.room_count;
+        selectedRoomIndex = newSelectedIndex;
     }
 }

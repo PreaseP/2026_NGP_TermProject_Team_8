@@ -5,7 +5,22 @@
 // [11.6] 글자는 추가하고, Backspace는 삭제하고, Enter는 로그인 요청을 보낸다.
 void InputHandler::OnKeyDown(unsigned char key)
 {
-    if (game == nullptr || game->GetState() != CLIENT_LOGIN) return;
+    if (game == nullptr) return;
+
+    // [11.11] 로비에서는 Enter로 현재 선택한 방의 입장을 요청한다.
+    if (game->GetState() == CLIENT_LOBBY) {
+        if (key != '\r') return;
+        const int roomIndex = game->GetSelectedRoomIndex();
+        const RoomSummary* room = game->GetRoom(roomIndex);
+        if (room == nullptr) return;
+
+        C2S_JoinRoom request{};
+        request.type = C2S_JOIN_ROOM;
+        request.room_id = room->room_id; // [11.11] 서버가 보낸 실제 방 번호를 사용한다.
+        game->QueueRequest(&request, sizeof(request));
+        return;
+    }
+    if (game->GetState() != CLIENT_LOGIN) return;
 
     if (key == '\r') { // Enter
         // 실패해도 닉네임을 유지한다. 고친 뒤 Enter를 누르면 다시 요청할 수 있다.

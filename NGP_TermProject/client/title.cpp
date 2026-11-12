@@ -435,7 +435,8 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
 }
 
 // [11.10] 기존 셰이더와 사각형 그리기로 로비 이미지를 배치한다.
-void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomCount) const {
+void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomCount,
+    int selectedRoomIndex) const {
     if (!isInitialized) return;
 
     // [11.10] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
@@ -481,11 +482,33 @@ void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomC
     }
     for (int i = 0; rooms != nullptr && i < roomCount && i < MAX_ROOMS; ++i) {
         const float y = 170.0f + i * 145.0f;
+        // [11.11] 선택한 방만 중심을 유지하며 5% 크게 그린다.
+        const bool selected = i == selectedRoomIndex;
+        float scale = 1.0f;
+        if (selected) scale = 1.05f;
+        const float buttonWidth = 548.27f * scale;
+        const float buttonHeight = 182.76f * scale;
+        const float frameWidth = 504.41f * scale;
+        const float frameHeight = 95.03f * scale;
+        const float frameX = 600.0f - frameWidth / 2;
+        const float frameY = y + 120.0f - frameHeight / 2;
         if (lobbyRoomButtonTextureId != 0) {
-            drawUIQuad(shader, 325.865f, y + 33.62f, 548.27f, 182.76f, lobbyRoomButtonTextureId, white);
+            drawUIQuad(shader, 600.0f - buttonWidth / 2, y + 125.0f - buttonHeight / 2,
+                buttonWidth, buttonHeight, lobbyRoomButtonTextureId, white);
         }
         else {
-            panel(shader, 347.795f, y + 72.485f, 504.41f, 95.03f, 0.1f, 0.15f, 0.2f, 0.9f);
+            panel(shader, frameX, frameY, frameWidth, frameHeight, 0.1f, 0.15f, 0.2f, 0.9f);
+        }
+        if (selected) {
+            // [11.11] 버튼 가장자리에 얇은 흰색 테두리 네 면을 그린다.
+            const float outlineX = frameX - 4;
+            const float outlineY = frameY - 4;
+            const float outlineWidth = frameWidth + 8;
+            const float outlineHeight = frameHeight + 8;
+            panel(shader, outlineX, outlineY, outlineWidth, 2, 1, 1, 1, 0.9f);
+            panel(shader, outlineX, outlineY + outlineHeight - 2, outlineWidth, 2, 1, 1, 1, 0.9f);
+            panel(shader, outlineX, outlineY, 2, outlineHeight, 1, 1, 1, 0.9f);
+            panel(shader, outlineX + outlineWidth - 2, outlineY, 2, outlineHeight, 1, 1, 1, 0.9f);
         }
 
         // [11.10] 서버에서 받은 방 번호, 인원, 상태를 버튼 중앙에 표시한다.
