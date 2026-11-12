@@ -190,3 +190,22 @@ void GameServer::HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet
     BuildRoomList(&roomList);
     SendToLobby(&roomList);
 }
+
+void GameServer::LeaveRoomInternal(GameSession* session)
+{
+    if (session->roomId == INVALID_ID)
+        return;
+
+    const int roomId = session->roomId;
+    Room& room = rooms[roomId];
+    room.RemovePlayer(session->slot);
+
+    session->roomId = INVALID_ID;
+    session->slot = INVALID_ID;
+
+    room.SendRoomInfo();
+
+    S2C_RoomList roomList{};
+    BuildRoomList(&roomList);
+    SendToLobby(&roomList);
+}
