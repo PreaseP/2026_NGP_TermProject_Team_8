@@ -511,6 +511,7 @@ void Keyboard(unsigned char key, int x, int y)
 		glutPostRedisplay();
 		return;
 	}
+	if (gameClient.GetState() == CLIENT_ROOM) return; // [11.11] 대기실 입력은 다음 단계에서 연결한다.
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		GameState newState = titleScreen.handleKeyInput(key);
@@ -849,7 +850,12 @@ GLvoid drawScene()
 	if (gameClient.GetState() == CLIENT_LOBBY) { // [11.10] 로그인 성공 후 로비 이미지를 그린다.
 		// [11.11] 현재 선택 위치를 화면에도 전달한다.
 		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount(),
-			gameClient.GetSelectedRoomIndex());
+			gameClient.GetSelectedRoomIndex(), gameClient.GetErrorMessage());
+		glutSwapBuffers();
+		return;
+	}
+	if (gameClient.GetState() == CLIENT_ROOM) { // [11.11] 서버가 입장을 허용한 뒤 안내를 표시한다.
+		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot());
 		glutSwapBuffers();
 		return;
 	}

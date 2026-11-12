@@ -307,6 +307,37 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         }
     }
 
+    // [11.11] 방 입장 결과를 읽고 성공한 경우에만 대기실 상태로 바꾼다.
+    if (packet[1] == S2C_JOIN_ROOM_RESULT && currentState == CLIENT_LOBBY) {
+        S2C_JoinRoomResult result{};
+        std::memcpy(&result, packet, sizeof(result));
+        switch (result.result) {
+        case JOIN_OK:
+            if (result.room_id >= MAX_ROOMS || result.my_slot >= MAX_ROOM_PLAYERS) {
+                HandleDisconnect(); // [11.11] 성공 응답의 방·자리 번호가 잘못됐다.
+                return;
+            }
+            myRoomId = result.room_id;
+            mySlot = result.my_slot;
+            currentState = CLIENT_ROOM;
+            inputHandler.Reset();
+            errorMessage.clear();
+            break;
+        case JOIN_ROOM_FULL:
+            errorMessage = "Room is full. Choose another room.";
+            break;
+        case JOIN_ROOM_PLAYING:
+            errorMessage = "Room is already playing. Choose another room.";
+            break;
+        case JOIN_INVALID_ROOM:
+            errorMessage = "Room does not exist. Choose another room.";
+            break;
+        default:
+            HandleDisconnect(); // [11.11] 정의된 입장 결과가 아니다.
+            return;
+        }
+    }
+
     // [11.10] 로비에서 받은 방 목록을 검사하고 저장한다.
     if (packet[1] == S2C_ROOM_LIST && currentState == CLIENT_LOBBY) {
         S2C_RoomList roomList{};

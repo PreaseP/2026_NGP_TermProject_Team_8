@@ -436,7 +436,7 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
 
 // [11.10] 기존 셰이더와 사각형 그리기로 로비 이미지를 배치한다.
 void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomCount,
-    int selectedRoomIndex) const {
+    int selectedRoomIndex, const std::string& error) const {
     if (!isInitialized) return;
 
     // [11.10] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
@@ -524,7 +524,59 @@ void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomC
         centeredText(shader, roomText, y + 132.0f, 1, 1, 1, 22.0f);
     }
 
+    // [11.11] 정상적인 입장 거절은 로비 아래쪽에 이유를 표시한다.
+    if (!error.empty()) {
+        centeredText(shader, error, 654, 1, 0.6f, 0.55f, 18.0f);
+    }
+
     // [11.10] 로비를 그리기 전의 깊이·투명도 설정으로 돌린다.
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+}
+
+// [11.11] 서버가 확인한 방 번호와 자리 번호를 간단히 표시한다.
+void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot) const {
+    if (!isInitialized) return;
+
+    // [11.11] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
+    const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glUseProgram(shader);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glActiveTexture(GL_TEXTURE0);
+    glm::mat4 view(1.0f);
+    glm::mat4 projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
+
+    if (lobbyBackgroundTextureId != 0) {
+        drawUIQuad(shader, 0, 0, 1200, 675, lobbyBackgroundTextureId, glm::vec4(1.0f));
+    }
+    else {
+        panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
+    }
+    panel(shader, 320, 270, 560, 150, 0.035f, 0.075f, 0.11f, 0.94f);
+    centeredText(shader, "ROOM ENTERED", 325, 1, 1, 1, 26.0f);
+    const std::string location = "Room " + std::to_string(roomId) + "    Slot " + std::to_string(slot);
+    centeredText(shader, location, 380, 1, 1, 1, 22.0f);
+
+    // [11.11] 입장 안내를 그리기 전의 깊이·투명도 설정으로 돌린다.
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);

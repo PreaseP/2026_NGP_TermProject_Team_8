@@ -11,6 +11,8 @@ class GameClient {
 public:
     const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
+    int GetMyRoomId() const { return myRoomId; } // [11.11] 입장한 방 번호
+    int GetMySlot() const { return mySlot; } // [11.11] 서버가 지정한 자리 번호
     int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
     int GetSelectedRoomIndex() const { return selectedRoomIndex; } // [11.11] 현재 선택한 목록 위치
     void MoveRoomSelection(int direction); // [11.11] -1은 위, 1은 아래로 방 선택 이동
