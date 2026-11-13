@@ -19,6 +19,8 @@ void TitleScreen::initialize() {
     // [11.10] 로비 배경, 방 버튼, 제목 이미지를 준비한다.
     loadLobbyTexture("Images/Lobby/Lobby_background.png", lobbyBackgroundTextureId);
     loadLobbyTexture("Images/Lobby/lobby_roombutton.png", lobbyRoomButtonTextureId);
+    // [11.12] 방향키로 선택한 방은 전용 이미지로 표시한다.
+    loadLobbyTexture("Images/Lobby/lobby_roombutton_selected.png", lobbyRoomSelectedTextureId);
     loadLobbyTexture("Images/Lobby/lobby_text.png", lobbyTextTextureId);
     // [11.12] 나가기 버튼의 두 상태를 미리 불러온다.
     loadLobbyTexture("Images/Room/room_back_to_lobby.png", roomBackTextureId);
@@ -201,6 +203,11 @@ void TitleScreen::cleanup() {
     if (lobbyBackgroundTextureId != 0) {
         glDeleteTextures(1, &lobbyBackgroundTextureId);
         lobbyBackgroundTextureId = 0;
+    }
+    // [11.12] 선택된 방 버튼 이미지도 함께 정리한다.
+    if (lobbyRoomSelectedTextureId != 0) {
+        glDeleteTextures(1, &lobbyRoomSelectedTextureId);
+        lobbyRoomSelectedTextureId = 0;
     }
     if (lobbyRoomButtonTextureId != 0) {
         glDeleteTextures(1, &lobbyRoomButtonTextureId);
@@ -519,23 +526,15 @@ void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomC
         const float frameHeight = 95.03f * scale;
         const float frameX = 600.0f - frameWidth / 2;
         const float frameY = y + 120.0f - frameHeight / 2;
-        if (lobbyRoomButtonTextureId != 0) {
+        // [11.12] 확대 크기는 유지하고 선택 여부에 따라 이미지만 바꾼다.
+        const GLuint buttonTexture = selected && lobbyRoomSelectedTextureId != 0
+            ? lobbyRoomSelectedTextureId : lobbyRoomButtonTextureId;
+        if (buttonTexture != 0) {
             drawUIQuad(shader, 600.0f - buttonWidth / 2, y + 125.0f - buttonHeight / 2,
-                buttonWidth, buttonHeight, lobbyRoomButtonTextureId, white);
+                buttonWidth, buttonHeight, buttonTexture, white);
         }
         else {
             panel(shader, frameX, frameY, frameWidth, frameHeight, 0.1f, 0.15f, 0.2f, 0.9f);
-        }
-        if (selected) {
-            // [11.11] 버튼 가장자리에 얇은 흰색 테두리 네 면을 그린다.
-            const float outlineX = frameX - 4;
-            const float outlineY = frameY - 4;
-            const float outlineWidth = frameWidth + 8;
-            const float outlineHeight = frameHeight + 8;
-            panel(shader, outlineX, outlineY, outlineWidth, 2, 1, 1, 1, 0.9f);
-            panel(shader, outlineX, outlineY + outlineHeight - 2, outlineWidth, 2, 1, 1, 1, 0.9f);
-            panel(shader, outlineX, outlineY, 2, outlineHeight, 1, 1, 1, 0.9f);
-            panel(shader, outlineX + outlineWidth - 2, outlineY, 2, outlineHeight, 1, 1, 1, 0.9f);
         }
 
         // [11.10] 서버에서 받은 방 번호, 인원, 상태를 버튼 중앙에 표시한다.

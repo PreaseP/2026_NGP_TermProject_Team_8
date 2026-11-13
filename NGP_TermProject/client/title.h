@@ -63,6 +63,7 @@ private:
     GLuint titleTextureId = 0;
     GLuint lobbyBackgroundTextureId = 0; // [11.10] 로비 배경
     GLuint lobbyRoomButtonTextureId = 0; // [11.10] 방 버튼
+    GLuint lobbyRoomSelectedTextureId = 0; // [11.12] 선택된 방 버튼 이미지
     GLuint lobbyTextTextureId = 0; // [11.10] 로비 제목
     // [11.12] 대기실 나가기 버튼의 기본/마우스 올림 이미지
     GLuint roomBackTextureId = 0;
