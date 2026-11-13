@@ -15,5 +15,6 @@ private:
 
 public:
 	bool Init(unsigned short port, RecvEventQueue* recvQueue, SendRequestQueue* sendQueue);
+	void RunLoop();
 	void Close();
 };

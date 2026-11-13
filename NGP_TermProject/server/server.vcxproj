@@ -131,6 +131,7 @@
     <ClInclude Include="NetworkServer.h" />
     <ClInclude Include="PlayerState.h" />
     <ClInclude Include="Room.h" />
+    <ClInclude Include="ServerApp.h" />
     <ClInclude Include="Snowball.h" />
     <ClInclude Include="ThreadQueue.h" />
     <ClCompile Include="..\common\Common.cpp" />
@@ -141,6 +142,12 @@
     <ClCompile Include="NetworkServer.cpp" />
     <ClCompile Include="PlayerState.cpp" />
     <ClCompile Include="Room.cpp" />
+    <ClCompile Include="ServerApp.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Snowball.cpp" />
   </ItemGroup>
   <ItemGroup>
