@@ -118,8 +118,9 @@ bool InitOpenGL(int& argc, char** argv);
 // [통합 종료] 창 닫기 콜백 전용 정리 함수.
 void OnExit();
 
-void Mouse(int button, int state, int x, int y);
-void MouseMotion(int x, int y);
+void OnMouseButton(int button, int state, int x, int y);
+void OnMouseMove(int x, int y);
+void OnMouseEnterLeave(int state); // [11.12] 창 밖으로 나가면 버튼 효과를 끈다.
 void Keyboard(unsigned char key, int x, int y);
 void KeyboardUp(unsigned char key, int x, int y);
 void SpecialKeyboard(int key, int x, int y);
@@ -295,8 +296,10 @@ int main(int argc, char** argv)
 	glutKeyboardUpFunc(KeyboardUp);
 	glutSpecialFunc(SpecialKeyboard);
 	glutSpecialUpFunc(SpecialKeyboardUp);
-	glutMouseFunc(Mouse);
-	glutPassiveMotionFunc(MouseMotion);
+	glutMouseFunc(OnMouseButton);
+	glutPassiveMotionFunc(OnMouseMove);
+	glutMotionFunc(OnMouseMove); // [11.12] 누른 채 움직일 때도 위치 갱신
+	glutEntryFunc(OnMouseEnterLeave);
 	glutTimerFunc(16, TimerFunction, 1);
 	glutMainLoop();
 
@@ -736,7 +739,7 @@ void SpecialKeyboardUp(int key, int x, int y)
 	glutPostRedisplay();
 }
 
-void Mouse(int button, int state, int x, int y)
+void OnMouseButton(int button, int state, int x, int y)
 {
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
@@ -777,9 +780,20 @@ void Mouse(int button, int state, int x, int y)
 	}
 }
 
-void MouseMotion(int x, int y)
+void OnMouseMove(int x, int y)
 {
+    // [11.12] 마우스 위치를 전달하면 대기실을 그릴 때 이미지를 고른다.
+    titleScreen.SetMousePosition(x, y);
+    glutPostRedisplay();
+}
 
+void OnMouseEnterLeave(int state)
+{
+    // [11.12] 창 밖에서는 마우스 올림 효과를 남기지 않는다.
+    if (state == GLUT_LEFT) {
+        titleScreen.SetMousePosition(-1, -1);
+        glutPostRedisplay();
+    }
 }
 
 void make_shaderProgram()

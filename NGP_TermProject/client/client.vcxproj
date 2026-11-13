@@ -186,9 +186,12 @@
       <GameAssets Include="$(ProjectDir)*.png;$(ProjectDir)*.glsl" />
       <!-- [11.10] 로비 이미지의 폴더 경로를 유지한다. -->
       <LobbyAssets Include="$(ProjectDir)Images\Lobby\*.png" />
+      <!-- [11.12] 대기실 버튼 이미지도 실행 폴더에 복사한다. -->
+      <RoomAssets Include="$(ProjectDir)Images\Room\*.png" />
     </ItemGroup>
     <Copy SourceFiles="@(GameAssets)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
     <Copy SourceFiles="@(LobbyAssets)" DestinationFolder="$(OutDir)Images\Lobby\" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(RoomAssets)" DestinationFolder="$(OutDir)Images\Room\" SkipUnchangedFiles="true" />
   </Target>
   <ItemGroup>
     <None Include="cgproj.cpp" />

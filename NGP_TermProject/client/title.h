@@ -29,6 +29,9 @@ public:
     // [11.7] 로그인 입력·버튼과 로그인 성공 후 로비 안내를 그린다.
     void renderLoginUI(GLuint shaderProgram, const char* name, const std::string& error, bool lobby) const;
     bool hitsStart(int x, int y, int width, int height) const;
+    // [11.12] 마우스 위치를 기억하고 나가기 버튼 안인지 확인한다.
+    void SetMousePosition(int x, int y);
+    bool IsMouseOverBackButton(int x, int y, int width, int height) const;
     void PlayNameError(); // [11.7] 버튼을 잠깐 붉게 만들고 좌우로 흔든다.
 
 private:
@@ -61,5 +64,13 @@ private:
     GLuint lobbyBackgroundTextureId = 0; // [11.10] 로비 배경
     GLuint lobbyRoomButtonTextureId = 0; // [11.10] 방 버튼
     GLuint lobbyTextTextureId = 0; // [11.10] 로비 제목
+    // [11.12] 대기실 나가기 버튼의 기본/마우스 올림 이미지
+    GLuint roomBackTextureId = 0;
+    GLuint roomBackHoverTextureId = 0;
+    int roomPointerX = -1;
+    int roomPointerY = -1;
+    const float ROOM_BACK_X = 40.0f;
+    const float ROOM_BACK_Y = 40.0f;
+    const float ROOM_BACK_SIZE = 80.0f;
     bool textureLoaded = false;
 };

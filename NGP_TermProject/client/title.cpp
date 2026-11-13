@@ -20,6 +20,9 @@ void TitleScreen::initialize() {
     loadLobbyTexture("Images/Lobby/Lobby_background.png", lobbyBackgroundTextureId);
     loadLobbyTexture("Images/Lobby/lobby_roombutton.png", lobbyRoomButtonTextureId);
     loadLobbyTexture("Images/Lobby/lobby_text.png", lobbyTextTextureId);
+    // [11.12] 나가기 버튼의 두 상태를 미리 불러온다.
+    loadLobbyTexture("Images/Room/room_back_to_lobby.png", roomBackTextureId);
+    loadLobbyTexture("Images/Room/room_back_to_lobby_hover.png", roomBackHoverTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -185,6 +188,15 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 }
 
 void TitleScreen::cleanup() {
+    // [11.12] 나가기 버튼 이미지도 함께 정리한다.
+    if (roomBackTextureId != 0) {
+        glDeleteTextures(1, &roomBackTextureId);
+        roomBackTextureId = 0;
+    }
+    if (roomBackHoverTextureId != 0) {
+        glDeleteTextures(1, &roomBackHoverTextureId);
+        roomBackHoverTextureId = 0;
+    }
     // [11.10] 로비 텍스처를 지우고 번호를 0으로 비운다.
     if (lobbyBackgroundTextureId != 0) {
         glDeleteTextures(1, &lobbyBackgroundTextureId);
@@ -381,6 +393,21 @@ bool TitleScreen::hitsStart(int x, int y, int width, int height) const {
     return std::abs(px - (600.0f + startOffsetX())) <= halfWidth && std::abs(py - 535.0f) <= halfHeight;
 }
 
+// [11.12] 창 밖으로 나가면 (-1, -1)을 받아 올림 효과를 끈다.
+void TitleScreen::SetMousePosition(int x, int y) {
+    roomPointerX = x;
+    roomPointerY = y;
+}
+
+// [11.12] 창 크기가 달라도 화면과 같은 1200 x 675 좌표로 검사한다.
+bool TitleScreen::IsMouseOverBackButton(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= ROOM_BACK_X && px < ROOM_BACK_X + ROOM_BACK_SIZE &&
+        py >= ROOM_BACK_Y && py < ROOM_BACK_Y + ROOM_BACK_SIZE;
+}
+
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
     // [11.7] 배경과 같은 셰이더를 사용하고, 메뉴용 투영·투명도만 설정한다.
     const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
@@ -571,6 +598,15 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
     }
     else {
         panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
+    }
+    // [11.12] 마우스가 올라가면 눌린 느낌의 이미지로 바꾼다.
+    const bool backHovered = IsMouseOverBackButton(roomPointerX, roomPointerY,
+        glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+    const GLuint backTexture = backHovered && roomBackHoverTextureId != 0
+        ? roomBackHoverTextureId : roomBackTextureId;
+    if (backTexture != 0) {
+        drawUIQuad(shader, ROOM_BACK_X, ROOM_BACK_Y, ROOM_BACK_SIZE, ROOM_BACK_SIZE,
+            backTexture, glm::vec4(1.0f));
     }
     // [11.12] 현재 방과 두 자리의 참가자 정보를 표시한다.
     panel(shader, 240, 150, 720, 375, 0.035f, 0.075f, 0.11f, 0.94f);
