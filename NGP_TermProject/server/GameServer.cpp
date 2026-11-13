@@ -101,6 +101,12 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
     case C2S_LEAVE_ROOM:
         LeaveRoomInternal(session);
         break;
+    case C2S_SELECT_CHARACTER:
+        HandleSelectCharacter(session, *reinterpret_cast<const C2S_SelectCharacter*>(data));
+        break;
+    case C2S_GAME_START:
+        HandleGameStart(session, *reinterpret_cast<const C2S_GameStart*>(data));
+        break;
     default:
         break;
     }
@@ -208,4 +214,71 @@ void GameServer::LeaveRoomInternal(GameSession* session)
     S2C_RoomList roomList{};
     BuildRoomList(&roomList);
     SendToLobby(&roomList);
+}
+
+void GameServer::HandleSelectCharacter(GameSession* session, const C2S_SelectCharacter& packet)
+{
+    if (session->roomId == INVALID_ID)
+        return;
+    if (packet.character != CHAR_STEVE && packet.character != CHAR_ALEX)
+        return;
+
+    Room& room = rooms[session->roomId];
+    if (room.state != ROOM_WAITING)
+        return;
+
+    room.SelectCharacter(session->slot, packet.character);
+    room.SendRoomInfo();
+}
+
+void GameServer::HandleGameStart(GameSession* session, const C2S_GameStart&)
+{
+    if (session->roomId == INVALID_ID)
+        return;
+
+    Room& room = rooms[session->roomId];
+    if (room.StartGame(GetTickCount64()))
+        return;
+
+    S2C_GameStartResult fail{};
+    fail.size = sizeof(fail);
+    fail.type = S2C_GAME_START_RESULT;
+    fail.success = false;
+    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i)
+        fail.character[i] = CHAR_NONE;
+    SendPacket(session->sessionId, &fail);
+}
+
+void GameServer::SendPacket(int sessionId, const void* packet, bool closeAfterSend)
+{
+    const PacketHeader* header = static_cast<const PacketHeader*>(packet);
+    if (header->size == 0 || header->size > BUF_SIZE)
+        return;
+
+    SendRequest request{};
+    request.targetSessionId = sessionId;
+    request.packetSize = header->size;
+    memcpy(request.packetData, packet, header->size);
+    request.closeAfterSend = closeAfterSend;
+
+    server.sendQueue->Enqueue(request, closeAfterSend);
+}
+
+void GameServer::BuildRoomList(S2C_RoomList* out)
+{
+    out->size = sizeof(S2C_RoomList);
+    out->type = S2C_ROOM_LIST;
+    out->room_count = MAX_ROOMS;
+    for (int i = 0; i < MAX_ROOMS; ++i) {
+        out->rooms[i].room_id = rooms[i].roomId;
+        out->rooms[i].player_count = static_cast<unsigned char>(rooms[i].GetPlayerCount());
+        out->rooms[i].state = rooms[i].state;
+    }
+}
+
+void GameServer::SendRoomList(int sessionId)
+{
+    S2C_RoomList roomList{};
+    BuildRoomList(&roomList);
+    SendPacket(sessionId, &roomList);
 }

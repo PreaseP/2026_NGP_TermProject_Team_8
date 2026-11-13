@@ -29,10 +29,12 @@ public:
     void OnPacket(int sessionId, const unsigned char* data, int size); // 클라이언트 패킷 검증 및 처리
     void HandleLogin(GameSession* session, const C2S_Login& packet); // 로그인 검증 및 결과 전송
     void HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet); // 방 입장 요청 처리
+    void HandleSelectCharacter(GameSession* session, const C2S_SelectCharacter& packet);
+    void HandleGameStart(GameSession* session, const C2S_GameStart& packet);
     void LeaveRoomInternal(GameSession* session); // 방 퇴장 처리
     GameSession* FindGameSession(int sessionId); // 연결 번호로 게임 세션 찾기
     bool IsValidName(const char* name);
-    void SendPacket(int sessionId, const void* packet);
+    void SendPacket(int sessionId, const void* packet, bool closeAfterSend = false); // 패킷 송신·연결 종료 요청 등록
     void SendToLobby(const void* packet);
     void SendRoomList(int sessionId);
     void BuildRoomList(S2C_RoomList* out);
