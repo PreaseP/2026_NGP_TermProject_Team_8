@@ -540,7 +540,8 @@ void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomC
 }
 
 // [11.11] 서버가 확인한 방 번호와 자리 번호를 간단히 표시한다.
-void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot) const {
+void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
+    const RoomPlayerInfo* players) const {
     if (!isInitialized) return;
 
     // [11.11] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
@@ -571,10 +572,31 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot) const {
     else {
         panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
     }
-    panel(shader, 320, 270, 560, 150, 0.035f, 0.075f, 0.11f, 0.94f);
-    centeredText(shader, "ROOM ENTERED", 325, 1, 1, 1, 26.0f);
-    const std::string location = "Room " + std::to_string(roomId) + "    Slot " + std::to_string(slot);
-    centeredText(shader, location, 380, 1, 1, 1, 22.0f);
+    // [11.12] 현재 방과 두 자리의 참가자 정보를 표시한다.
+    panel(shader, 240, 150, 720, 375, 0.035f, 0.075f, 0.11f, 0.94f);
+    centeredText(shader, "WAITING ROOM", 200, 1, 1, 1, 28.0f);
+    const std::string location = "Room " + std::to_string(roomId) + "    Your slot: " + std::to_string(slot);
+    centeredText(shader, location, 235, 0.75f, 0.88f, 1, 20.0f);
+    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
+        const float y = 260.0f + i * 120.0f;
+        const bool mySlot = i == slot;
+        panel(shader, 280, y, 640, 105, 0.1f, mySlot ? 0.23f : 0.15f, mySlot ? 0.33f : 0.2f, 0.95f);
+        std::string seat = "Slot " + std::to_string(i);
+        if (mySlot) seat += " (You)";
+        centeredText(shader, seat, y + 25, 0.75f, 0.88f, 1, 18.0f);
+        if (players == nullptr || !players[i].connected) {
+            centeredText(shader, "Waiting for player...", y + 67, 0.7f, 0.75f, 0.8f, 20.0f);
+            continue;
+        }
+        const RoomPlayerInfo& player = players[i];
+        const char* characterText = "Not selected";
+        switch (player.character) {
+        case CHAR_STEVE: characterText = "Steve"; break;
+        case CHAR_ALEX: characterText = "Alex"; break;
+        }
+        centeredText(shader, player.name, y + 58, 1, 1, 1, 22.0f);
+        centeredText(shader, characterText, y + 88, 0.85f, 0.9f, 0.95f, 18.0f);
+    }
 
     // [11.11] 입장 안내를 그리기 전의 깊이·투명도 설정으로 돌린다.
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);

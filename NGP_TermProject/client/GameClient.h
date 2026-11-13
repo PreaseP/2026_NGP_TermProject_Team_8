@@ -13,6 +13,11 @@ public:
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
     int GetMyRoomId() const { return myRoomId; } // [11.11] 입장한 방 번호
     int GetMySlot() const { return mySlot; } // [11.11] 서버가 지정한 자리 번호
+    // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
+    const RoomPlayerInfo* GetRoomPlayer(int slot) const {
+        if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
+        return &roomPlayers[slot];
+    }
     int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
     int GetSelectedRoomIndex() const { return selectedRoomIndex; } // [11.11] 현재 선택한 목록 위치
     void MoveRoomSelection(int direction); // [11.11] -1은 위, 1은 아래로 방 선택 이동
@@ -48,6 +53,7 @@ private:
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
+    RoomPlayerInfo roomPlayers[MAX_ROOM_PLAYERS]{}; // [11.12] 현재 방의 두 자리 참가자 정보
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
     int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.

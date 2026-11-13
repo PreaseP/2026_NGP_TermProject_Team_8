@@ -855,7 +855,9 @@ GLvoid drawScene()
 		return;
 	}
 	if (gameClient.GetState() == CLIENT_ROOM) { // [11.11] 서버가 입장을 허용한 뒤 안내를 표시한다.
-		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot());
+		// [11.12] 저장된 두 자리 참가자 정보를 화면에 전달한다.
+		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot(),
+			gameClient.GetRoomPlayer(0));
 		glutSwapBuffers();
 		return;
 	}

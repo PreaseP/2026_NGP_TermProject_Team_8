@@ -29,6 +29,11 @@ bool GameClient::Init(const char* ip)
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    // [11.12] 시작할 때 참가자와 캐릭터 선택을 비운다.
+    for (RoomPlayerInfo& player : roomPlayers) {
+        player = {};
+        player.character = CHAR_NONE;
+    }
     // [11.10] 시작할 때 방 목록을 비움
     for (RoomSummary& room : rooms) {
         room = {};
@@ -78,6 +83,11 @@ void GameClient::HandleDisconnect()
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    // [11.12] 연결이 끊기면 이전 방의 참가자 정보를 비운다.
+    for (RoomPlayerInfo& player : roomPlayers) {
+        player = {};
+        player.character = CHAR_NONE;
+    }
     // [11.10] 연결이 끊기면 이전 서버의 방 목록을 비운다.
     for (RoomSummary& room : rooms) {
         room = {};
@@ -319,6 +329,11 @@ void GameClient::ProcessPacket(const unsigned char* packet)
             }
             myRoomId = result.room_id;
             mySlot = result.my_slot;
+            // [11.12] 새 방의 참가자 정보를 받을 준비를 한다.
+            for (RoomPlayerInfo& player : roomPlayers) {
+                player = {};
+                player.character = CHAR_NONE;
+            }
             currentState = CLIENT_ROOM;
             inputHandler.Reset();
             errorMessage.clear();
@@ -336,6 +351,42 @@ void GameClient::ProcessPacket(const unsigned char* packet)
             HandleDisconnect(); // [11.11] 정의된 입장 결과가 아니다.
             return;
         }
+    }
+
+    // [11.12] 현재 방의 참가자 정보를 검사하고 저장한다.
+    if (packet[1] == S2C_ROOM_INFO && currentState == CLIENT_ROOM) {
+        S2C_RoomInfo roomInfo{};
+        std::memcpy(&roomInfo, packet, sizeof(roomInfo));
+        if (roomInfo.room_id >= MAX_ROOMS || roomInfo.room_id != myRoomId) {
+            HandleDisconnect(); // [11.12] 현재 들어간 방의 정보가 아니다.
+            return;
+        }
+
+        for (RoomPlayerInfo& player : roomInfo.players) {
+            // [11.12] 접속 여부는 0 또는 1이어야 한다.
+            unsigned char connected = 0;
+            std::memcpy(&connected, &player.connected, sizeof(connected));
+            if (connected > 1) {
+                HandleDisconnect();
+                return;
+            }
+            if (connected == 0) {
+                player = {}; // [11.12] 빈 자리의 이전 이름과 캐릭터를 지운다.
+                player.character = CHAR_NONE;
+                continue;
+            }
+            if (player.character != CHAR_STEVE && player.character != CHAR_ALEX &&
+                player.character != CHAR_NONE) {
+                HandleDisconnect(); // [11.12] 정해진 캐릭터 값이 아니다.
+                return;
+            }
+
+            // [11.12] 이름 규칙은 다시 검사하지 않고 문자열 끝만 보장한다.
+            player.name[MAX_NAME_LEN - 1] = '\0';
+        }
+
+        // [11.12] 두 자리 모두 검사가 끝나면 저장된 정보를 한 번에 바꾼다.
+        std::memcpy(roomPlayers, roomInfo.players, sizeof(roomPlayers));
     }
 
     // [11.10] 로비에서 받은 방 목록을 검사하고 저장한다.
