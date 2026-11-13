@@ -514,7 +514,12 @@ void Keyboard(unsigned char key, int x, int y)
 		glutPostRedisplay();
 		return;
 	}
-	if (gameClient.GetState() == CLIENT_ROOM) return; // [11.11] 대기실 입력은 다음 단계에서 연결한다.
+	// [11.11] 대기실 입력은 다음 단계에서 연결한다.
+	if (gameClient.GetState() == CLIENT_ROOM) { // [11.12] Esc 퇴장 입력을 전달한다.
+		gameClient.OnKeyDown(key);
+		glutPostRedisplay();
+		return;
+	}
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		GameState newState = titleScreen.handleKeyInput(key);
@@ -751,6 +756,15 @@ void OnMouseButton(int button, int state, int x, int y)
 		return;
 	}
 	if (gameClient.GetState() == CLIENT_LOBBY) return;
+	// [11.12] 나가기 버튼 클릭도 Esc와 같은 퇴장 처리로 보낸다.
+	if (gameClient.GetState() == CLIENT_ROOM) {
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
+			titleScreen.IsMouseOverBackButton(x, y, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))) {
+			gameClient.OnKeyDown(27);
+		}
+		glutPostRedisplay();
+		return;
+	}
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}

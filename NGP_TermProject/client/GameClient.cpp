@@ -187,10 +187,28 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         return false;
     }
 
+    // [11.12] 퇴장은 대기실에서 정해진 크기의 패킷으로만 요청한다.
+    if (request[1] == C2S_LEAVE_ROOM &&
+        (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_LeaveRoom))) {
+        errorMessage = "Invalid leave room request.";
+        return false;
+    }
+
     request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
     if (!network.QueuePacket(request)) {
         HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.
         return false;
+    }
+    // [11.12] 퇴장 응답 패킷이 없으므로 등록 성공 후 로비로 돌아간다.
+    if (request[1] == C2S_LEAVE_ROOM) {
+        myRoomId = -1;
+        mySlot = -1;
+        for (RoomPlayerInfo& player : roomPlayers) {
+            player = {};
+            player.character = CHAR_NONE;
+        }
+        inputHandler.Reset(); // 닉네임은 유지하고 이전 이동·공격 입력만 비운다.
+        currentState = CLIENT_LOBBY;
     }
     errorMessage.clear();
     return true; // [11.11] 송신 버퍼에 등록한 상태다.

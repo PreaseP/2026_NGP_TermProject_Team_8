@@ -7,6 +7,15 @@ void InputHandler::OnKeyDown(unsigned char key)
 {
     if (game == nullptr) return;
 
+    // [11.12] 대기실에서 Esc를 누르면 퇴장 요청을 등록한다.
+    if (game->GetState() == CLIENT_ROOM) {
+        if (key != 27) return; // Esc
+        C2S_LeaveRoom request{};
+        request.type = C2S_LEAVE_ROOM;
+        game->QueueRequest(&request, sizeof(request));
+        return;
+    }
+
     // [11.11] 로비에서는 Enter로 현재 선택한 방의 입장을 요청한다.
     if (game->GetState() == CLIENT_LOBBY) {
         if (key != '\r') return;
