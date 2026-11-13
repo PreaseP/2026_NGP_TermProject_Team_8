@@ -46,7 +46,7 @@ public:
     PlayerState    players[MAX_ROOM_PLAYERS];
     Snowball       snowballs[MAX_SNOWBALLS];
     int            nextSnowballID = OBJ_ID_SNOWBALL_START;
-    float          wallHeight = 0.0f;
+    float          wallHeight[MAP_WIDTH][MAP_DEPTH] = {};
     ULONGLONG      nextItemMs = 0;
     GameServer*    server = nullptr;
 
@@ -62,4 +62,8 @@ public:
     void Broadcast(const void* packet) const; // 방 참가자 전원에게 패킷 전송
     void SendTo(int slot, const void* packet) const;
     void BuildRoomInfo(S2C_RoomInfo* out) const;
+    void SendStatusChange(int objectId, STATUS_TYPE type, float value) const; // 오브젝트 상태 변경 전송
+    void SendMoveObject(int objectId, const glm::vec3& pos) const; // 오브젝트 이동 좌표 전송
+    static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
+    bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
 };

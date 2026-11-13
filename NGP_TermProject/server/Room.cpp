@@ -8,7 +8,7 @@ void Room::Init(int id, GameServer* owner)
     state = ROOM_WAITING;
     resultEndMS = 0;
     nextSnowballID = OBJ_ID_SNOWBALL_START;
-    wallHeight = 0.0f;
+    memset(wallHeight, 0, sizeof(wallHeight));
     nextItemMs = 0;
 
     for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
@@ -83,7 +83,7 @@ void Room::ResetWorld()
         snowball.Deactivate();
 
     nextSnowballID = OBJ_ID_SNOWBALL_START;
-    wallHeight = 0.0f;
+    memset(wallHeight, 0, sizeof(wallHeight));
 }
 
 void Room::SendTo(int slot, const void* packet) const
@@ -126,4 +126,66 @@ void Room::SendRoomInfo() const
     S2C_RoomInfo info{};
     BuildRoomInfo(&info);
     Broadcast(&info);
+}
+
+void Room::SendStatusChange(int objectId, STATUS_TYPE type, float value) const
+{
+    S2C_StatusChange packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_STATUS_CHANGE;
+    packet.object_id = objectId;
+    packet.status = type;
+    packet.value = value;
+    Broadcast(&packet);
+}
+
+void Room::SendMoveObject(int objectId, const glm::vec3& pos) const
+{
+    S2C_MoveObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_MOVE_OBJECT;
+    packet.object_id = objectId;
+    packet.x = pos.x;
+    packet.y = pos.y;
+    packet.z = pos.z;
+    Broadcast(&packet);
+}
+
+bool Room::WorldToGrid(float x, float z, int* gx, int* gz)
+{
+    if (x < 0.0f || z < 0.0f)
+        return false;
+
+    const int cellX = static_cast<int>(x / BLOCK_SIZE);
+    const int cellZ = static_cast<int>(z / BLOCK_SIZE);
+    if (cellX >= MAP_WIDTH || cellZ >= MAP_DEPTH)
+        return false;
+
+    *gx = cellX;
+    *gz = cellZ;
+    return true;
+}
+
+bool Room::IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const
+{
+    const float halfX = bbox.x * 0.5f;
+    const float halfZ = bbox.z * 0.5f;
+
+    int minX, minZ, maxX, maxZ;
+    const bool minOk = WorldToGrid(pos.x - halfX, pos.z - halfZ, &minX, &minZ);
+    const bool maxOk = WorldToGrid(pos.x + halfX, pos.z + halfZ, &maxX, &maxZ);
+    if (!minOk)
+        minX = minZ = 0;
+    if (!maxOk) {
+        maxX = MAP_WIDTH - 1;
+        maxZ = MAP_DEPTH - 1;
+    }
+
+    for (int gx = minX; gx <= maxX; ++gx) {
+        for (int gz = minZ; gz <= maxZ; ++gz) {
+            if (wallHeight[gx][gz] >= WALL_BLOCK_HEIGHT)
+                return true;
+        }
+    }
+    return false;
 }
