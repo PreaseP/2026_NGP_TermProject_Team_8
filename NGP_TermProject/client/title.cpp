@@ -44,6 +44,9 @@ void TitleScreen::initialize() {
     loadLobbyTexture("Images/Room/room_character_right.png", roomCharacterArrowTextureIds[1]);
     loadLobbyTexture("Images/Room/room_character_left_hover.png", roomCharacterArrowHoverTextureIds[0]);
     loadLobbyTexture("Images/Room/room_character_right_hover.png", roomCharacterArrowHoverTextureIds[1]);
+    // [11.14] 선택 완료 버튼의 두 이미지를 불러온다.
+    loadLobbyTexture("Images/Room/room_character_confirm.png", roomCharacterConfirmTextureId);
+    loadLobbyTexture("Images/Room/room_character_confirm_hover.png", roomCharacterConfirmHoverTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -264,6 +267,15 @@ void TitleScreen::cleanup() {
         }
     }
     ResetCharacterPreview();
+    // [11.14] 선택 완료 버튼도 정리한다.
+    if (roomCharacterConfirmTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterConfirmTextureId);
+        roomCharacterConfirmTextureId = 0;
+    }
+    if (roomCharacterConfirmHoverTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterConfirmHoverTextureId);
+        roomCharacterConfirmHoverTextureId = 0;
+    }
     // [11.12] 나가기 버튼 이미지도 함께 정리한다.
     if (roomBackTextureId != 0) {
         glDeleteTextures(1, &roomBackTextureId);
@@ -503,14 +515,28 @@ bool TitleScreen::IsMouseOverCharacterArrow(int x, int y, int width, int height,
 // [11.14] 현재 표시 중인 캐릭터를 기준으로 Steve·Alex를 번갈아 본다.
 void TitleScreen::ChangeCharacterPreview(int direction, int serverCharacter) {
     if (direction != -1 && direction != 1) return;
-    int current = previewCharacter >= 0 ? previewCharacter : serverCharacter;
-    if (current == CHAR_NONE) current = CHAR_STEVE; // 내 카드의 기본 표시와 맞춘다.
+    const int current = GetPreviewCharacter(serverCharacter);
     previewCharacter = current == CHAR_STEVE ? CHAR_ALEX : CHAR_STEVE;
 }
 
 // [11.14] 대기실을 나가면 이전 미리보기를 비운다.
 void TitleScreen::ResetCharacterPreview() {
     previewCharacter = -1;
+}
+
+// [11.14] 로컬 선택이 없으면 서버 값을 쓰고, 미선택의 기본은 Steve다.
+int TitleScreen::GetPreviewCharacter(int serverCharacter) const {
+    const int character = previewCharacter >= 0 ? previewCharacter : serverCharacter;
+    return character == CHAR_NONE ? CHAR_STEVE : character;
+}
+
+// [11.14] 화면에 그리는 선택 완료 버튼과 같은 영역을 검사한다.
+bool TitleScreen::IsMouseOverCharacterConfirm(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= CHARACTER_CONFIRM_X && px < CHARACTER_CONFIRM_X + CHARACTER_CONFIRM_WIDTH &&
+        py >= CHARACTER_CONFIRM_Y && py < CHARACTER_CONFIRM_Y + CHARACTER_CONFIRM_HEIGHT;
 }
 
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
@@ -756,8 +782,7 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
         const char* characterText = "Selecting...";
         // [11.14] 내 카드만 로컬 미리보기를 우선하고 상대는 서버 값을 사용한다.
         // [11.14] 나는 미선택이어도 Steve부터 보고, 상대의 미선택은 물음표로 둔다.
-        int displayCharacter = myCard && previewCharacter >= 0 ? previewCharacter : player.character;
-        if (myCard && displayCharacter == CHAR_NONE) displayCharacter = CHAR_STEVE;
+        const int displayCharacter = myCard ? GetPreviewCharacter(player.character) : player.character;
         switch (displayCharacter) {
         case CHAR_STEVE:
             characterTexture = roomCharacterSteveTextureId;
@@ -798,6 +823,22 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
                     centeredText(shader, left ? "<" : ">", CHARACTER_ARROW_Y + 40,
                         1, 1, 1, 24.0f, arrowX + CHARACTER_ARROW_SIZE / 2);
                 }
+            }
+        }
+        // [11.14] 내 참가자 정보가 있을 때 선택 완료 버튼을 표시한다.
+        if (myCard) {
+            const bool hovered = IsMouseOverCharacterConfirm(roomPointerX, roomPointerY,
+                glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+            const GLuint confirmTexture = hovered && roomCharacterConfirmHoverTextureId != 0
+                ? roomCharacterConfirmHoverTextureId : roomCharacterConfirmTextureId;
+            if (confirmTexture != 0) {
+                drawUIQuad(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
+                    CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, confirmTexture, glm::vec4(1.0f));
+            }
+            else {
+                panel(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
+                    CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
+                centeredText(shader, "Select", CHARACTER_CONFIRM_Y + 40, 1, 1, 1, 20.0f);
             }
         }
         // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.

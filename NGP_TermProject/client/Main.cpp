@@ -775,7 +775,13 @@ void OnMouseButton(int button, int state, int x, int y)
 					else if (titleScreen.IsMouseOverCharacterArrow(x, y, width, height, false)) {
 						titleScreen.ChangeCharacterPreview(1, me->character);
 					}
-
+					else if (titleScreen.IsMouseOverCharacterConfirm(x, y, width, height)) {
+						// [11.14] 현재 표시 중인 캐릭터를 기존 송신 버퍼에 등록한다.
+						C2S_SelectCharacter request{};
+						request.type = C2S_SELECT_CHARACTER;
+						request.character = static_cast<CHARACTER_TYPE>(titleScreen.GetPreviewCharacter(me->character));
+						gameClient.QueueRequest(&request, sizeof(request));
+					}
 				}
 			}
 		}

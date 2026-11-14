@@ -194,6 +194,18 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         return false;
     }
 
+    // [11.14] 캐릭터 선택은 대기실에서 정해진 패킷과 캐릭터로만 요청한다.
+    if (request[1] == C2S_SELECT_CHARACTER) {
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_SelectCharacter)) {
+            errorMessage = "Invalid character selection request.";
+            return false;
+        }
+        if (request[2] != CHAR_STEVE && request[2] != CHAR_ALEX) {
+            errorMessage = "Invalid character selection.";
+            return false;
+        }
+    }
+
     request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
     if (!network.QueuePacket(request)) {
         HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.
