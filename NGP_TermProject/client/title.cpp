@@ -39,6 +39,11 @@ void TitleScreen::initialize() {
     loadLobbyTexture("Images/Room/room_character_steve.png", roomCharacterSteveTextureId);
     loadLobbyTexture("Images/Room/room_character_alex.png", roomCharacterAlexTextureId);
     loadLobbyTexture("Images/Room/room_character_unknown.png", roomCharacterUnknownTextureId);
+    // [11.14] 좌우 화살표의 기본·마우스 올림 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_character_left.png", roomCharacterArrowTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_character_right.png", roomCharacterArrowTextureIds[1]);
+    loadLobbyTexture("Images/Room/room_character_left_hover.png", roomCharacterArrowHoverTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_character_right_hover.png", roomCharacterArrowHoverTextureIds[1]);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -245,6 +250,20 @@ void TitleScreen::cleanup() {
         glDeleteTextures(1, &roomCharacterUnknownTextureId);
         roomCharacterUnknownTextureId = 0;
     }
+    // [11.14] 화살표 이미지와 로컬 미리보기를 정리한다.
+    for (GLuint& textureId : roomCharacterArrowTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    for (GLuint& textureId : roomCharacterArrowHoverTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    ResetCharacterPreview();
     // [11.12] 나가기 버튼 이미지도 함께 정리한다.
     if (roomBackTextureId != 0) {
         glDeleteTextures(1, &roomBackTextureId);
@@ -469,6 +488,29 @@ bool TitleScreen::IsMouseOverBackButton(int x, int y, int width, int height) con
     const float py = y * 675.0f / height;
     return px >= ROOM_BACK_X && px < ROOM_BACK_X + ROOM_BACK_SIZE &&
         py >= ROOM_BACK_Y && py < ROOM_BACK_Y + ROOM_BACK_SIZE;
+}
+
+// [11.14] 그리는 위치와 같은 좌표로 화살표 안인지 검사한다.
+bool TitleScreen::IsMouseOverCharacterArrow(int x, int y, int width, int height, bool left) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    const float arrowX = left ? CHARACTER_ARROW_LEFT_X : CHARACTER_ARROW_RIGHT_X;
+    return px >= arrowX && px < arrowX + CHARACTER_ARROW_SIZE &&
+        py >= CHARACTER_ARROW_Y && py < CHARACTER_ARROW_Y + CHARACTER_ARROW_SIZE;
+}
+
+// [11.14] 현재 표시 중인 캐릭터를 기준으로 Steve·Alex를 번갈아 본다.
+void TitleScreen::ChangeCharacterPreview(int direction, int serverCharacter) {
+    if (direction != -1 && direction != 1) return;
+    int current = previewCharacter >= 0 ? previewCharacter : serverCharacter;
+    if (current == CHAR_NONE) current = CHAR_STEVE; // 내 카드의 기본 표시와 맞춘다.
+    previewCharacter = current == CHAR_STEVE ? CHAR_ALEX : CHAR_STEVE;
+}
+
+// [11.14] 대기실을 나가면 이전 미리보기를 비운다.
+void TitleScreen::ResetCharacterPreview() {
+    previewCharacter = -1;
 }
 
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
@@ -712,7 +754,10 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
         // [11.14] 서버에서 받은 캐릭터 값으로 전신 또는 물음표를 고른다.
         GLuint characterTexture = roomCharacterUnknownTextureId;
         const char* characterText = "Selecting...";
-        const int displayCharacter = player.character;
+        // [11.14] 내 카드만 로컬 미리보기를 우선하고 상대는 서버 값을 사용한다.
+        // [11.14] 나는 미선택이어도 Steve부터 보고, 상대의 미선택은 물음표로 둔다.
+        int displayCharacter = myCard && previewCharacter >= 0 ? previewCharacter : player.character;
+        if (myCard && displayCharacter == CHAR_NONE) displayCharacter = CHAR_STEVE;
         switch (displayCharacter) {
         case CHAR_STEVE:
             characterTexture = roomCharacterSteveTextureId;
@@ -733,6 +778,27 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
         if (characterTexture != 0) {
             drawUIQuad(shader, centerX - characterWidth / 2.0f, characterY,
                 characterWidth, characterHeight, characterTexture, glm::vec4(1.0f));
+        }
+        // [11.14] 화살표는 내 카드에만 표시한다.
+        if (myCard) {
+            for (int arrowIndex = 0; arrowIndex < 2; ++arrowIndex) {
+                const bool left = arrowIndex == 0;
+                const float arrowX = left ? CHARACTER_ARROW_LEFT_X : CHARACTER_ARROW_RIGHT_X;
+                const bool hovered = IsMouseOverCharacterArrow(roomPointerX, roomPointerY,
+                    glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT), left);
+                const GLuint arrowTexture = hovered && roomCharacterArrowHoverTextureIds[arrowIndex] != 0
+                    ? roomCharacterArrowHoverTextureIds[arrowIndex] : roomCharacterArrowTextureIds[arrowIndex];
+                if (arrowTexture != 0) {
+                    drawUIQuad(shader, arrowX, CHARACTER_ARROW_Y, CHARACTER_ARROW_SIZE, CHARACTER_ARROW_SIZE,
+                        arrowTexture, glm::vec4(1.0f));
+                }
+                else {
+                    panel(shader, arrowX, CHARACTER_ARROW_Y, CHARACTER_ARROW_SIZE, CHARACTER_ARROW_SIZE,
+                        0.2f, 0.25f, 0.3f, 1.0f);
+                    centeredText(shader, left ? "<" : ">", CHARACTER_ARROW_Y + 40,
+                        1, 1, 1, 24.0f, arrowX + CHARACTER_ARROW_SIZE / 2);
+                }
+            }
         }
         // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.
         centeredText(shader, characterText, 610, 0.85f, 0.9f, 0.95f, 18.0f, centerX);

@@ -758,9 +758,26 @@ void OnMouseButton(int button, int state, int x, int y)
 	if (gameClient.GetState() == CLIENT_LOBBY) return;
 	// [11.12] 나가기 버튼 클릭도 Esc와 같은 퇴장 처리로 보낸다.
 	if (gameClient.GetState() == CLIENT_ROOM) {
-		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
-			titleScreen.IsMouseOverBackButton(x, y, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))) {
-			gameClient.OnKeyDown(27);
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+			const int width = glutGet(GLUT_WINDOW_WIDTH);
+			const int height = glutGet(GLUT_WINDOW_HEIGHT);
+			titleScreen.SetMousePosition(x, y);
+			if (titleScreen.IsMouseOverBackButton(x, y, width, height)) {
+				gameClient.OnKeyDown(27);
+			}
+			else {
+				// [11.14] 화살표 클릭은 서버 전송 없이 내 미리보기만 바꾼다.
+				const RoomPlayerInfo* me = gameClient.GetRoomPlayer(gameClient.GetMySlot());
+				if (me != nullptr && me->connected) {
+					if (titleScreen.IsMouseOverCharacterArrow(x, y, width, height, true)) {
+						titleScreen.ChangeCharacterPreview(-1, me->character);
+					}
+					else if (titleScreen.IsMouseOverCharacterArrow(x, y, width, height, false)) {
+						titleScreen.ChangeCharacterPreview(1, me->character);
+					}
+
+				}
+			}
 		}
 		glutPostRedisplay();
 		return;
@@ -871,6 +888,8 @@ void make_shaderProgram()
 GLvoid drawScene()
 {
 	if (shaderProgramID == 0) return;
+	// [11.14] 로비·로그인 등에서는 이전 대기실 미리보기를 비운다.
+	if (gameClient.GetState() != CLIENT_ROOM) titleScreen.ResetCharacterPreview();
 	glUseProgram(shaderProgramID);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

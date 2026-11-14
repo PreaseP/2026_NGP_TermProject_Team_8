@@ -32,6 +32,10 @@ public:
     // [11.12] 마우스 위치를 기억하고 나가기 버튼 안인지 확인한다.
     void SetMousePosition(int x, int y);
     bool IsMouseOverBackButton(int x, int y, int width, int height) const;
+    // [11.14] 화살표는 내 화면의 캐릭터 미리보기만 바꾼다.
+    bool IsMouseOverCharacterArrow(int x, int y, int width, int height, bool left) const;
+    void ChangeCharacterPreview(int direction, int serverCharacter);
+    void ResetCharacterPreview();
     void PlayNameError(); // [11.7] 버튼을 잠깐 붉게 만들고 좌우로 흔든다.
 
 private:
@@ -82,6 +86,14 @@ private:
     GLuint roomCharacterSteveTextureId = 0;
     GLuint roomCharacterAlexTextureId = 0;
     GLuint roomCharacterUnknownTextureId = 0;
+    // [11.14] 화살표 배열은 왼쪽 0, 오른쪽 1이다.
+    GLuint roomCharacterArrowTextureIds[2] = {};
+    GLuint roomCharacterArrowHoverTextureIds[2] = {};
+    int previewCharacter = -1; // -1이면 서버 값을 보되, 내 미선택은 Steve로 표시한다.
+    const float CHARACTER_ARROW_LEFT_X = 210.0f;
+    const float CHARACTER_ARROW_RIGHT_X = 430.0f;
+    const float CHARACTER_ARROW_Y = 470.0f;
+    const float CHARACTER_ARROW_SIZE = 60.0f;
     int roomPointerX = -1;
     int roomPointerY = -1;
     const float ROOM_BACK_X = 40.0f;
