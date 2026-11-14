@@ -13,8 +13,11 @@ private:
 	SendRequestQueue* sendQueue = nullptr;
 	std::atomic<bool> running{false};
 
+	void DisconnectClient(NetSession* session);
+
 public:
 	bool Init(unsigned short port, RecvEventQueue* recvQueue, SendRequestQueue* sendQueue);
 	void RunLoop();
+	void Stop();
 	void Close();
 };
