@@ -25,6 +25,20 @@ void TitleScreen::initialize() {
     // [11.12] 나가기 버튼의 두 상태를 미리 불러온다.
     loadLobbyTexture("Images/Room/room_back_to_lobby.png", roomBackTextureId);
     loadLobbyTexture("Images/Room/room_back_to_lobby_hover.png", roomBackHoverTextureId);
+    // [11.14] 대기실 제목과 화면용 방 번호 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_title.png", roomTitleTextureId);
+    loadLobbyTexture("Images/Room/room_number_1.png", roomNumberTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_number_2.png", roomNumberTextureIds[1]);
+    loadLobbyTexture("Images/Room/room_number_3.png", roomNumberTextureIds[2]);
+    // [11.14] 나와 상대의 카드 프레임·이름표를 준비한다.
+    loadLobbyTexture("Images/Room/room_player_frame.png", roomPlayerFrameTextureId);
+    loadLobbyTexture("Images/Room/room_opponent_frame.png", roomOpponentFrameTextureId);
+    loadLobbyTexture("Images/Room/room_player_label.png", roomPlayerLabelTextureId);
+    loadLobbyTexture("Images/Room/room_opponent_label.png", roomOpponentLabelTextureId);
+    // [11.14] 캐릭터 전신과 미선택 물음표 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_character_steve.png", roomCharacterSteveTextureId);
+    loadLobbyTexture("Images/Room/room_character_alex.png", roomCharacterAlexTextureId);
+    loadLobbyTexture("Images/Room/room_character_unknown.png", roomCharacterUnknownTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -190,6 +204,47 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 }
 
 void TitleScreen::cleanup() {
+    // [11.14] 제목과 방 번호 텍스처를 지우고 번호를 비운다.
+    if (roomTitleTextureId != 0) {
+        glDeleteTextures(1, &roomTitleTextureId);
+        roomTitleTextureId = 0;
+    }
+    for (GLuint& textureId : roomNumberTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    // [11.14] 카드 프레임과 이름표도 함께 정리한다.
+    if (roomPlayerFrameTextureId != 0) {
+        glDeleteTextures(1, &roomPlayerFrameTextureId);
+        roomPlayerFrameTextureId = 0;
+    }
+    if (roomOpponentFrameTextureId != 0) {
+        glDeleteTextures(1, &roomOpponentFrameTextureId);
+        roomOpponentFrameTextureId = 0;
+    }
+    if (roomPlayerLabelTextureId != 0) {
+        glDeleteTextures(1, &roomPlayerLabelTextureId);
+        roomPlayerLabelTextureId = 0;
+    }
+    if (roomOpponentLabelTextureId != 0) {
+        glDeleteTextures(1, &roomOpponentLabelTextureId);
+        roomOpponentLabelTextureId = 0;
+    }
+    // [11.14] 캐릭터 전신과 물음표 이미지도 정리한다.
+    if (roomCharacterSteveTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterSteveTextureId);
+        roomCharacterSteveTextureId = 0;
+    }
+    if (roomCharacterAlexTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterAlexTextureId);
+        roomCharacterAlexTextureId = 0;
+    }
+    if (roomCharacterUnknownTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterUnknownTextureId);
+        roomCharacterUnknownTextureId = 0;
+    }
     // [11.12] 나가기 버튼 이미지도 함께 정리한다.
     if (roomBackTextureId != 0) {
         glDeleteTextures(1, &roomBackTextureId);
@@ -316,10 +371,11 @@ void TitleScreen::loadFontTexture() {
 }
 
 void TitleScreen::centeredText(GLuint shader, const std::string& text, float y,
-    float r, float g, float b, float size) const {
+    float r, float g, float b, float size, float centerX) const {
     if (!fontTextureId) return;
     const float scale = size / 24.0f;
-    float x = 600.0f - static_cast<float>(text.size()) * 14.0f * scale / 2;
+    // [11.14] 화면 또는 카드의 가운데를 기준으로 글자를 배치한다.
+    float x = centerX - static_cast<float>(text.size()) * 14.0f * scale / 2;
     for (unsigned char ch : text) {
         if (ch < 32 || ch > 126) ch = '?';
         const int index = ch - 32, column = index % 16, row = index / 16;
@@ -608,29 +664,78 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
             backTexture, glm::vec4(1.0f));
     }
     // [11.12] 현재 방과 두 자리의 참가자 정보를 표시한다.
-    panel(shader, 240, 150, 720, 375, 0.035f, 0.075f, 0.11f, 0.94f);
-    centeredText(shader, "WAITING ROOM", 200, 1, 1, 1, 28.0f);
-    const std::string location = "Room " + std::to_string(roomId) + "    Your slot: " + std::to_string(slot);
-    centeredText(shader, location, 235, 0.75f, 0.88f, 1, 20.0f);
-    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
-        const float y = 260.0f + i * 120.0f;
-        const bool mySlot = i == slot;
-        panel(shader, 280, y, 640, 105, 0.1f, mySlot ? 0.23f : 0.15f, mySlot ? 0.33f : 0.2f, 0.95f);
-        std::string seat = "Slot " + std::to_string(i);
-        if (mySlot) seat += " (You)";
-        centeredText(shader, seat, y + 25, 0.75f, 0.88f, 1, 18.0f);
-        if (players == nullptr || !players[i].connected) {
-            centeredText(shader, "Waiting for player...", y + 67, 0.7f, 0.75f, 0.8f, 20.0f);
+    // [11.14] 제목과 방 번호만 위쪽에 표시하고 참가자 정보는 유지한다.
+    if (roomTitleTextureId != 0) {
+        drawUIQuad(shader, 450, 20, 300, 120, roomTitleTextureId, glm::vec4(1.0f));
+    }
+    else {
+        centeredText(shader, "WAITING ROOM", 100, 1, 1, 1, 28.0f);
+    }
+    // [11.14] 서버 방 번호 0~2로 ROOM 1~3 이미지를 고른다.
+    if (roomId >= 0 && roomId < MAX_ROOMS) {
+        const GLuint numberTexture = roomNumberTextureIds[roomId];
+        if (numberTexture != 0) {
+            drawUIQuad(shader, 470, 150, 260, 260.0f / 3.0f, numberTexture, glm::vec4(1.0f));
+        }
+        else {
+            centeredText(shader, "ROOM " + std::to_string(roomId + 1), 205, 0.75f, 0.88f, 1, 20.0f);
+        }
+    }
+    // [11.14] 내 자리 번호와 관계없이 나는 왼쪽, 상대는 오른쪽에 표시한다.
+    for (int cardIndex = 0; cardIndex < MAX_ROOM_PLAYERS; ++cardIndex) {
+        const bool myCard = cardIndex == 0;
+        const int playerSlot = myCard ? slot : 1 - slot;
+        const float centerX = myCard ? 350.0f : 850.0f;
+        const GLuint frameTexture = myCard ? roomPlayerFrameTextureId : roomOpponentFrameTextureId;
+        const GLuint labelTexture = myCard ? roomPlayerLabelTextureId : roomOpponentLabelTextureId;
+        if (frameTexture != 0) {
+            drawUIQuad(shader, centerX - 180, 235, 360, 420, frameTexture, glm::vec4(1.0f));
+        }
+        else {
+            panel(shader, centerX - 155, 270, 310, 365, 0.1f, myCard ? 0.23f : 0.15f,
+                myCard ? 0.33f : 0.2f, 0.95f);
+        }
+        if (labelTexture != 0) {
+            drawUIQuad(shader, centerX - 100, 270, 200, 200.0f * 763.0f / 2060.0f,
+                labelTexture, glm::vec4(1.0f));
+        }
+        else {
+            centeredText(shader, myCard ? "You" : "Opponent", 325, 0.75f, 0.88f, 1, 22.0f, centerX);
+        }
+        // [11.14] 빈 자리에는 대기 문구를 표시하고 참가자 배열은 읽기만 한다.
+        if (players == nullptr || slot < 0 || slot >= MAX_ROOM_PLAYERS ||
+            !players[playerSlot].connected) {
+            centeredText(shader, "Waiting for player...", 405, 0.7f, 0.75f, 0.8f, 18.0f, centerX);
             continue;
         }
-        const RoomPlayerInfo& player = players[i];
-        const char* characterText = "Not selected";
-        switch (player.character) {
-        case CHAR_STEVE: characterText = "Steve"; break;
-        case CHAR_ALEX: characterText = "Alex"; break;
+        const RoomPlayerInfo& player = players[playerSlot];
+        // [11.14] 서버에서 받은 캐릭터 값으로 전신 또는 물음표를 고른다.
+        GLuint characterTexture = roomCharacterUnknownTextureId;
+        const char* characterText = "Selecting...";
+        const int displayCharacter = player.character;
+        switch (displayCharacter) {
+        case CHAR_STEVE:
+            characterTexture = roomCharacterSteveTextureId;
+            characterText = "Steve";
+            break;
+        case CHAR_ALEX:
+            characterTexture = roomCharacterAlexTextureId;
+            characterText = "Alex";
+            break;
         }
-        centeredText(shader, player.name, y + 58, 1, 1, 1, 22.0f);
-        centeredText(shader, characterText, y + 88, 0.85f, 0.9f, 0.95f, 18.0f);
+        centeredText(shader, player.name, 365, 1, 1, 1, 22.0f, centerX);
+        // [11.14] 원본 비율을 유지하고 카드의 캐릭터 영역 가운데에 그린다.
+        const bool characterSelected = displayCharacter == CHAR_STEVE || displayCharacter == CHAR_ALEX;
+        const float characterHeight = characterSelected ? 210.0f : 170.0f;
+        const float characterWidth = characterHeight * (characterSelected
+            ? 1393.0f / 1129.0f : 1199.0f / 1312.0f);
+        const float characterY = 380.0f + (210.0f - characterHeight) / 2.0f;
+        if (characterTexture != 0) {
+            drawUIQuad(shader, centerX - characterWidth / 2.0f, characterY,
+                characterWidth, characterHeight, characterTexture, glm::vec4(1.0f));
+        }
+        // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.
+        centeredText(shader, characterText, 610, 0.85f, 0.9f, 0.95f, 18.0f, centerX);
     }
 
     // [11.11] 입장 안내를 그리기 전의 깊이·투명도 설정으로 돌린다.

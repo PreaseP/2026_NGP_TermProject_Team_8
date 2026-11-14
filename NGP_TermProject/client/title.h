@@ -44,7 +44,9 @@ private:
     void drawUIQuad(GLuint shader, float x, float y, float w, float h,
         GLuint texture, const glm::vec4& color, const glm::vec4& uv = glm::vec4(0, 0, 1, 1)) const;
     void panel(GLuint shader, float x, float y, float w, float h, float r, float g, float b, float a) const;
-    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b, float size = 18.0f) const;
+    // [11.14] centerX를 생략하면 기존처럼 화면 중앙에 표시한다.
+    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b,
+        float size = 18.0f, float centerX = 600.0f) const;
     GLuint fontTextureId = 0;
     float startScale() const; // [11.7] 표시와 클릭 검사에 같은 크기를 사용한다.
     float startErrorStrength() const; // [11.7] 남은 오류 효과의 세기: 1에서 0으로 줄어든다.
@@ -68,6 +70,18 @@ private:
     // [11.12] 대기실 나가기 버튼의 기본/마우스 올림 이미지
     GLuint roomBackTextureId = 0;
     GLuint roomBackHoverTextureId = 0;
+    // [11.14] 제목 1개와 ROOM 1~3 이미지의 텍스처 번호
+    GLuint roomTitleTextureId = 0;
+    GLuint roomNumberTextureIds[3] = {};
+    // [11.14] 나·상대 카드 프레임과 이름표
+    GLuint roomPlayerFrameTextureId = 0;
+    GLuint roomOpponentFrameTextureId = 0;
+    GLuint roomPlayerLabelTextureId = 0;
+    GLuint roomOpponentLabelTextureId = 0;
+    // [11.14] 서버 캐릭터 값에 따라 표시할 이미지
+    GLuint roomCharacterSteveTextureId = 0;
+    GLuint roomCharacterAlexTextureId = 0;
+    GLuint roomCharacterUnknownTextureId = 0;
     int roomPointerX = -1;
     int roomPointerY = -1;
     const float ROOM_BACK_X = 40.0f;
