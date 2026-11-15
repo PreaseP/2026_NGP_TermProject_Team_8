@@ -943,10 +943,20 @@ GLvoid Drawscene()
         const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
         const int winH = std::max(1, glutGet(GLUT_WINDOW_HEIGHT));
         glViewport(0, 0, winW, winH);
-        cameraPos = glm::vec3(gameClient.GetMySlot() == 0 ? -10.0f : 19.0f, 20.0f, 7.0f);
-        const glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(4.5f, 0.0f, 7.0f), cameraUp);
-        const glm::mat4 projection = glm::perspective(glm::radians(45.0f),
-            static_cast<float>(winW) / static_cast<float>(winH), 0.1f, 100.0f);
+        const ClientObject* me = gameClient.GetObject(gameClient.GetMySlot());
+        glm::mat4 view(1.0f), projection(1.0f);
+        if (gameClient.GetMySlot() == 0) {
+            steveCamera.updateFromCharacterPosition(me->renderPos);
+            cameraPos = steveCamera.getPosition();
+            view = steveCamera.getViewMatrix();
+            projection = steveCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
+        }
+        else {
+            alexCamera.updateFromCharacterPosition(me->renderPos);
+            cameraPos = alexCamera.getPosition();
+            view = alexCamera.getViewMatrix();
+            projection = alexCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
+        }
         renderWorld(view, projection);
         glutSwapBuffers();
         return;
@@ -990,37 +1000,32 @@ GLvoid Drawscene()
 		return;
 	}
 
-	int winW = glutGet(GLUT_WINDOW_WIDTH);
-	int winH = glutGet(GLUT_WINDOW_HEIGHT);
-	if (winW <= 0) winW = WinX;
-	if (winH <= 0) winH = WinY;
-
-	if (splitScreenMode && currentGameState == GameState::FIRST_PERSON_MODE) {
-		if (steve) steveCamera.updateFromCharacterPosition(steve->pos);
-		if (alex) alexCamera.updateFromCharacterPosition(alex->pos);
-
-		// 왼쪽: Steve
-		glViewport(0, 0, winW / 2, winH);
-		glm::mat4 steveView = steveCamera.getViewMatrix();
-		glm::mat4 steveProj = steveCamera.getProjectionMatrix(winW / 2, winH);
-		renderWorld(steveView, steveProj);
-
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		// 오른쪽: Alex
-		glViewport(winW / 2, 0, winW - winW / 2, winH);
-		glm::mat4 alexView = alexCamera.getViewMatrix();
-		glm::mat4 alexProj = alexCamera.getProjectionMatrix(winW - winW / 2, winH);
-		renderWorld(alexView, alexProj);
-
-		drawCharacterFaces(winW, winH);
-	}
-	else {
-		glViewport(0, 0, winW, winH);
-		glm::mat4 view = camera.getViewMatrix();
-		glm::mat4 proj = camera.getProjectionMatrix(winW, winH);
-		renderWorld(view, proj);
-	}
+// 	int winW = glutGet(GLUT_WINDOW_WIDTH);
+// 	int winH = glutGet(GLUT_WINDOW_HEIGHT);
+// 	if (winW <= 0) winW = WinX;
+// 	if (winH <= 0) winH = WinY;
+// 	if (splitScreenMode && currentGameState == GameState::FIRST_PERSON_MODE) {
+// 		if (steve) steveCamera.updateFromCharacterPosition(steve->pos);
+// 		if (alex) alexCamera.updateFromCharacterPosition(alex->pos);
+// 		// 왼쪽: Steve
+// 		glViewport(0, 0, winW / 2, winH);
+// 		glm::mat4 steveView = steveCamera.getViewMatrix();
+// 		glm::mat4 steveProj = steveCamera.getProjectionMatrix(winW / 2, winH);
+// 		renderWorld(steveView, steveProj);
+// 		glClear(GL_DEPTH_BUFFER_BIT);
+// 		// 오른쪽: Alex
+// 		glViewport(winW / 2, 0, winW - winW / 2, winH);
+// 		glm::mat4 alexView = alexCamera.getViewMatrix();
+// 		glm::mat4 alexProj = alexCamera.getProjectionMatrix(winW - winW / 2, winH);
+// 		renderWorld(alexView, alexProj);
+// 		drawCharacterFaces(winW, winH);
+// 	}
+// 	else {
+// 		glViewport(0, 0, winW, winH);
+// 		glm::mat4 view = camera.getViewMatrix();
+// 		glm::mat4 proj = camera.getProjectionMatrix(winW, winH);
+// 		renderWorld(view, proj);
+// 	}
 
 	glutSwapBuffers();
 }
@@ -1072,11 +1077,11 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
             const float facing = slot == 0 ? 0.0f : 180.0f;
             if (matchSteve[slot]) {
                 matchSteve[slot]->pos = player->renderPos;
-                matchSteve[slot]->draw(modelLoc, facing);
+                if (slot != gameClient.GetMySlot()) matchSteve[slot]->draw(modelLoc, facing);
             }
             if (matchAlex[slot]) {
                 matchAlex[slot]->pos = player->renderPos;
-                matchAlex[slot]->draw(modelLoc, facing - 180.0f);
+                if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
             }
         }
         return;
