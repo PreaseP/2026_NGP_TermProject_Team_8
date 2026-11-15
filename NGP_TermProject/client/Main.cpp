@@ -923,10 +923,35 @@ GLvoid Drawscene()
 	if (shaderProgramID == 0) return;
 	// [11.14] 로비·로그인 등에서는 이전 대기실 미리보기를 비운다.
 	if (gameClient.GetState() != CLIENT_ROOM) titleScreen.ResetCharacterPreview();
+	if (gameClient.GetState() != CLIENT_PLAYING && matchSceneInitialized) ClearMatchScene();
 	glUseProgram(shaderProgramID);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (gameClient.GetState() == CLIENT_PLAYING) {
+
+	switch (gameClient.GetState()) {
+	case CLIENT_LOGIN:
+		// [11.7] 닉네임 오류가 발생한 프레임에만 버튼 효과를 시작한다.
+		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
+		titleScreen.render(shaderProgramID);
+		// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
+		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
+			false, gameClient.GetServerAddress(),
+			gameClient.IsServerAddressFocused(), gameClient.IsServerAddressSelected());
+		break;
+
+	case CLIENT_LOBBY: // [11.10] 로그인 성공 후 로비 이미지를 그린다.
+		// [11.11] 현재 선택 위치를 화면에도 전달한다.
+		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount(),
+			gameClient.GetSelectedRoomIndex(), gameClient.GetErrorMessage());
+		break;
+
+	case CLIENT_ROOM: // [11.11] 서버가 입장을 허용한 뒤 안내를 표시한다.
+		// [11.12] 저장된 두 자리 참가자 정보를 화면에 전달한다.
+		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot(),
+			gameClient.GetRoomPlayer(0));
+		break;
+
+	case CLIENT_PLAYING: {
         if (!matchSceneInitialized) {
             gameMap.initialize();
             for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
@@ -956,47 +981,26 @@ GLvoid Drawscene()
             projection = alexCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
         }
         renderWorld(view, projection);
-        glutSwapBuffers();
-        return;
-    }
-    if (matchSceneInitialized) ClearMatchScene();
-	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
-	if (gameClient.GetState() == CLIENT_LOBBY) { // [11.10] 로그인 성공 후 로비 이미지를 그린다.
-		// [11.11] 현재 선택 위치를 화면에도 전달한다.
-		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount(),
-			gameClient.GetSelectedRoomIndex(), gameClient.GetErrorMessage());
-		glutSwapBuffers();
-		return;
-	}
-	if (gameClient.GetState() == CLIENT_ROOM) { // [11.11] 서버가 입장을 허용한 뒤 안내를 표시한다.
-		// [11.12] 저장된 두 자리 참가자 정보를 화면에 전달한다.
-		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot(),
-			gameClient.GetRoomPlayer(0));
-		glutSwapBuffers();
-		return;
-	}
-	if (gameClient.GetState() == CLIENT_LOGIN) {
-		// [11.7] 닉네임 오류가 발생한 프레임에만 버튼 효과를 시작한다.
-		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
-		titleScreen.render(shaderProgramID);
-		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
-			gameClient.GetState() == CLIENT_LOBBY, gameClient.GetServerAddress(),
-			gameClient.IsServerAddressFocused(), gameClient.IsServerAddressSelected());
-		glutSwapBuffers();
-		return;
+		break;
 	}
 
-	if (currentGameState == GameState::TITLE_SCREEN) {
-		titleScreen.render(shaderProgramID);
-		glutSwapBuffers();
-		return;
+	case CLIENT_RESULT:
+		break;
 	}
 
-	if (currentGameState == GameState::FINISH_SCREEN) {
-		finishScreen.render(shaderProgramID);
-		glutSwapBuffers();
-		return;
-	}
+	glutSwapBuffers();
+}
+
+// 	if (currentGameState == GameState::TITLE_SCREEN) {
+// 		titleScreen.render(shaderProgramID);
+// 		glutSwapBuffers();
+// 		return;
+// 	}
+// 	if (currentGameState == GameState::FINISH_SCREEN) {
+// 		finishScreen.render(shaderProgramID);
+// 		glutSwapBuffers();
+// 		return;
+// 	}
 
 // 	int winW = glutGet(GLUT_WINDOW_WIDTH);
 // 	int winH = glutGet(GLUT_WINDOW_HEIGHT);
@@ -1024,9 +1028,6 @@ GLvoid Drawscene()
 // 		glm::mat4 proj = camera.getProjectionMatrix(winW, winH);
 // 		renderWorld(view, proj);
 // 	}
-
-	glutSwapBuffers();
-}
 
 // GLvoid drawSplitScreen()
 // {
