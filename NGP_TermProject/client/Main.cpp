@@ -74,6 +74,34 @@ static KeyManager input;
 // [11.6] 시작 함수와 타이머에서 같은 클라이언트를 사용한다.
 static GameClient gameClient;
 
+static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
+static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
+static bool matchSceneInitialized = false;
+
+template<class CharacterType>
+void ReleaseCharacter(CharacterType*& character) {
+    if (!character) return;
+    for (Part* part : { &character->gBody, &character->gHead,
+        &character->gArmL, &character->gArmR, &character->gLegL,
+        &character->gLegR, &character->gBoundingBox }) {
+        glDeleteVertexArrays(1, &part->vao);
+        glDeleteBuffers(1, &part->vbo);
+        glDeleteBuffers(1, &part->nbo);
+        glDeleteBuffers(1, &part->tbo);
+    }
+    glDeleteTextures(1, &character->textureID);
+    delete character;
+    character = nullptr;
+}
+
+void ClearMatchScene() {
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        ReleaseCharacter(matchSteve[slot]);
+        ReleaseCharacter(matchAlex[slot]);
+    }
+    matchSceneInitialized = false;
+}
+
 static bool steveThrowFlag = false;
 static bool alexThrowFlag = false;
 
@@ -128,7 +156,7 @@ void SpecialKeyboardUp(int key, int x, int y);
 void TimerFunction(int value);
 
 void make_shaderProgram();
-GLvoid drawScene();
+GLvoid Drawscene();
 GLvoid drawSplitScreen();
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection);
 GLvoid Reshape(int w, int h);
@@ -199,6 +227,7 @@ bool InitOpenGL(int& argc, char** argv)
 	titleScreen.initialize();
 	return true;
 }
+
 // [변경 2 끝]
 
 // [통합 종료] freeglut이 창을 닫을 때 한 번 호출한다. 직접 호출하지 않는다.
@@ -216,22 +245,9 @@ void OnExit()
 	finishScreen.cleanup();
 
 	// 기존 캐릭터에는 GL 자원 소멸자가 없으므로 종료 시 여기서 회수한다.
-	auto releaseCharacter = [](auto*& character) {
-		if (!character) return;
-		for (Part* part : { &character->gBody, &character->gHead,
-			&character->gArmL, &character->gArmR, &character->gLegL,
-			&character->gLegR, &character->gBoundingBox }) {
-			glDeleteVertexArrays(1, &part->vao);
-			glDeleteBuffers(1, &part->vbo);
-			glDeleteBuffers(1, &part->nbo);
-			glDeleteBuffers(1, &part->tbo);
-		}
-		glDeleteTextures(1, &character->textureID);
-		delete character;
-		character = nullptr;
-	};
-	releaseCharacter(steve);
-	releaseCharacter(alex);
+	ReleaseCharacter(steve);
+	ReleaseCharacter(alex);
+	ClearMatchScene();
 
 	// Block의 기존 대입 연산자가 이전 GL 자원을 해제한다.
 	// 빈 블록으로 바꿔 정적 객체 소멸 시 닫힌 창의 GL 자원을 다시 건드리지 않게 한다.
@@ -260,6 +276,7 @@ void OnExit()
 
 	std::cout << "종료 정리 완료" << std::endl;
 }
+
 // [종료 변경 3 끝]
 
 int main(int argc, char** argv)
@@ -290,7 +307,7 @@ int main(int argc, char** argv)
 	std::cout << "종료: 창의 X 버튼" << std::endl;
 
 	//--- 콜백 등록
-	glutDisplayFunc(drawScene);
+	glutDisplayFunc(Drawscene);
 	glutReshapeFunc(Reshape);
 	glutKeyboardFunc(Keyboard);
 	glutKeyboardUpFunc(KeyboardUp);
@@ -507,6 +524,7 @@ void initializeGame() {
 
 void Keyboard(unsigned char key, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.6]
 	// [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
 	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) { // [11.11] Enter 입력 전달
@@ -588,6 +606,7 @@ void Keyboard(unsigned char key, int x, int y)
 
 void KeyboardUp(unsigned char key, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.6]
 	if (gameClient.GetState() == CLIENT_LOGIN) return;
 
@@ -746,6 +765,7 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void OnMouseButton(int button, int state, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
@@ -780,6 +800,11 @@ void OnMouseButton(int button, int state, int x, int y)
 						C2S_SelectCharacter request{};
 						request.type = C2S_SELECT_CHARACTER;
 						request.character = static_cast<CHARACTER_TYPE>(titleScreen.GetPreviewCharacter(me->character));
+						gameClient.QueueRequest(&request, sizeof(request));
+					}
+					else if (titleScreen.IsMouseOverGameStartButton(x, y, width, height)) {
+						C2S_GameStart request{};
+						request.type = C2S_GAME_START;
 						gameClient.QueueRequest(&request, sizeof(request));
 					}
 				}
@@ -891,7 +916,7 @@ void make_shaderProgram()
 	std::cout << "셰이더 프로그램이 성공적으로 생성되었습니다." << std::endl;
 }
 
-GLvoid drawScene()
+GLvoid Drawscene()
 {
 	if (shaderProgramID == 0) return;
 	// [11.14] 로비·로그인 등에서는 이전 대기실 미리보기를 비운다.
@@ -899,6 +924,30 @@ GLvoid drawScene()
 	glUseProgram(shaderProgramID);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (gameClient.GetState() == CLIENT_PLAYING) {
+        if (!matchSceneInitialized) {
+            gameMap.initialize();
+            for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+                const ClientObject* player = gameClient.GetObject(slot);
+                if (player->character == CHAR_STEVE)
+                    matchSteve[slot] = new Steve::Character("steve.png");
+                else
+                    matchAlex[slot] = new Alex::Character("alex.png");
+            }
+            matchSceneInitialized = true;
+        }
+        const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
+        const int winH = std::max(1, glutGet(GLUT_WINDOW_HEIGHT));
+        glViewport(0, 0, winW, winH);
+        cameraPos = glm::vec3(gameClient.GetMySlot() == 0 ? -10.0f : 19.0f, 20.0f, 7.0f);
+        const glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(4.5f, 0.0f, 7.0f), cameraUp);
+        const glm::mat4 projection = glm::perspective(glm::radians(45.0f),
+            static_cast<float>(winW) / static_cast<float>(winH), 0.1f, 100.0f);
+        renderWorld(view, projection);
+        glutSwapBuffers();
+        return;
+    }
+    if (matchSceneInitialized) ClearMatchScene();
 	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
 	if (gameClient.GetState() == CLIENT_LOBBY) { // [11.10] 로그인 성공 후 로비 이미지를 그린다.
 		// [11.11] 현재 선택 위치를 화면에도 전달한다.
@@ -1010,6 +1059,23 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 	if (useTextureLoc != -1) glUniform1i(useTextureLoc, 0);
 	gameMap.render();
 
+    if (gameClient.GetState() == CLIENT_PLAYING) {
+        if (viewPosLoc != -1) glUniform3fv(viewPosLoc, 1, &cameraPos[0]);
+        if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject* player = gameClient.GetObject(slot);
+            const float facing = slot == 0 ? 0.0f : 180.0f;
+            if (matchSteve[slot]) {
+                matchSteve[slot]->pos = player->renderPos;
+                matchSteve[slot]->draw(modelLoc, facing);
+            }
+            if (matchAlex[slot]) {
+                matchAlex[slot]->pos = player->renderPos;
+                matchAlex[slot]->draw(modelLoc, facing - 180.0f);
+            }
+        }
+        return;
+    }
 	if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
 	snowSystem.render(shaderProgramID);
 

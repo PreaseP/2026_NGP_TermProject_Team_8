@@ -3,8 +3,17 @@
 #include "NetworkClient.h"
 #include "InputHandler.h" // [11.6]
 #include <string>
+#include <unordered_map>
+#include <gl/glm/glm.hpp>
 
 enum CLIENT_STATE { CLIENT_LOGIN, CLIENT_LOBBY, CLIENT_ROOM, CLIENT_PLAYING, CLIENT_RESULT };
+
+struct ClientObject {
+    int objectId = -1;
+    OBJECT_TYPE type = OBJ_CHARACTER;
+    CHARACTER_TYPE character = CHAR_NONE;
+    glm::vec3 renderPos{0.0f};
+};
 
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
 class GameClient {
@@ -13,11 +22,23 @@ public:
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
     int GetMyRoomId() const { return myRoomId; } // [11.11] 입장한 방 번호
     int GetMySlot() const { return mySlot; } // [11.11] 서버가 지정한 자리 번호
+    const S2C_GameStartResult* GetGameStartResult() const {
+        return gameStartResult.success ? &gameStartResult : nullptr;
+    }
+    const ClientObject* GetObject(int objectId) const {
+        const auto found = objects.find(objectId);
+        return found != objects.end() ? &found->second : nullptr;
+    }
+    int GetHP(int slot) const {
+        if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
+        return hp[slot];
+    }
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
     const RoomPlayerInfo* GetRoomPlayer(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
         return &roomPlayers[slot];
     }
+
     int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
     int GetSelectedRoomIndex() const { return selectedRoomIndex; } // [11.11] 현재 선택한 목록 위치
     void MoveRoomSelection(int direction); // [11.11] -1은 위, 1은 아래로 방 선택 이동
@@ -45,6 +66,8 @@ public:
 
 private:
     void HandleDisconnect(); // [11.9] 이전 접속 정보를 비우고 첫 로그인 화면으로 돌아간다.
+    void HandleGameStartResult(const S2C_GameStartResult& result);
+    void ClearWorld();
 
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
     void ProcessPacket(const unsigned char* packet);
@@ -54,6 +77,9 @@ private:
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
     RoomPlayerInfo roomPlayers[MAX_ROOM_PLAYERS]{}; // [11.12] 현재 방의 두 자리 참가자 정보
+    S2C_GameStartResult gameStartResult{};
+    std::unordered_map<int, ClientObject> objects;
+    int hp[MAX_ROOM_PLAYERS]{};
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
     int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.

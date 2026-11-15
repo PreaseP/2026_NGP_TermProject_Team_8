@@ -47,6 +47,8 @@ void TitleScreen::initialize() {
     // [11.14] 선택 완료 버튼의 두 이미지를 불러온다.
     loadLobbyTexture("Images/Room/room_character_confirm.png", roomCharacterConfirmTextureId);
     loadLobbyTexture("Images/Room/room_character_confirm_hover.png", roomCharacterConfirmHoverTextureId);
+    loadLobbyTexture("Images/Room/room_game_start.png", roomGameStartTextureId);
+    loadLobbyTexture("Images/Room/room_game_start_hover.png", roomGameStartHoverTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -275,6 +277,14 @@ void TitleScreen::cleanup() {
     if (roomCharacterConfirmHoverTextureId != 0) {
         glDeleteTextures(1, &roomCharacterConfirmHoverTextureId);
         roomCharacterConfirmHoverTextureId = 0;
+    }
+    if (roomGameStartTextureId != 0) {
+        glDeleteTextures(1, &roomGameStartTextureId);
+        roomGameStartTextureId = 0;
+    }
+    if (roomGameStartHoverTextureId != 0) {
+        glDeleteTextures(1, &roomGameStartHoverTextureId);
+        roomGameStartHoverTextureId = 0;
     }
     // [11.12] 나가기 버튼 이미지도 함께 정리한다.
     if (roomBackTextureId != 0) {
@@ -537,6 +547,14 @@ bool TitleScreen::IsMouseOverCharacterConfirm(int x, int y, int width, int heigh
     const float py = y * 675.0f / height;
     return px >= CHARACTER_CONFIRM_X && px < CHARACTER_CONFIRM_X + CHARACTER_CONFIRM_WIDTH &&
         py >= CHARACTER_CONFIRM_Y && py < CHARACTER_CONFIRM_Y + CHARACTER_CONFIRM_HEIGHT;
+}
+
+bool TitleScreen::IsMouseOverGameStartButton(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= ROOM_GAME_START_X && px < ROOM_GAME_START_X + ROOM_GAME_START_WIDTH &&
+        py >= ROOM_GAME_START_Y && py < ROOM_GAME_START_Y + ROOM_GAME_START_HEIGHT;
 }
 
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
@@ -839,6 +857,21 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
                 panel(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
                     CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
                 centeredText(shader, "Select", CHARACTER_CONFIRM_Y + 40, 1, 1, 1, 20.0f);
+            }
+        }
+        if (myCard) {
+            const bool hovered = IsMouseOverGameStartButton(roomPointerX, roomPointerY,
+                glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+            const GLuint startTexture = hovered && roomGameStartHoverTextureId != 0
+                ? roomGameStartHoverTextureId : roomGameStartTextureId;
+            if (startTexture != 0) {
+                drawUIQuad(shader, ROOM_GAME_START_X, ROOM_GAME_START_Y,
+                    ROOM_GAME_START_WIDTH, ROOM_GAME_START_HEIGHT, startTexture, glm::vec4(1.0f));
+            }
+            else {
+                panel(shader, ROOM_GAME_START_X, ROOM_GAME_START_Y,
+                    ROOM_GAME_START_WIDTH, ROOM_GAME_START_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
+                centeredText(shader, "Game Start", ROOM_GAME_START_Y + 40, 1, 1, 1, 20.0f);
             }
         }
         // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.

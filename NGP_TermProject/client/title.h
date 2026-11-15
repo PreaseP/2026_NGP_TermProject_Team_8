@@ -39,6 +39,7 @@ public:
     // [11.14] 표시 중인 캐릭터를 선택 완료 요청에도 사용한다.
     int GetPreviewCharacter(int serverCharacter) const;
     bool IsMouseOverCharacterConfirm(int x, int y, int width, int height) const;
+    bool IsMouseOverGameStartButton(int x, int y, int width, int height) const;
     void PlayNameError(); // [11.7] 버튼을 잠깐 붉게 만들고 좌우로 흔든다.
 
 private:
@@ -99,6 +100,12 @@ private:
     const float CHARACTER_CONFIRM_Y = 540.0f;
     const float CHARACTER_CONFIRM_WIDTH = 190.0f;
     const float CHARACTER_CONFIRM_HEIGHT = 190.0f / 3.0f;
+    GLuint roomGameStartTextureId = 0;
+    GLuint roomGameStartHoverTextureId = 0;
+    const float ROOM_GAME_START_X = 505.0f;
+    const float ROOM_GAME_START_Y = 610.0f;
+    const float ROOM_GAME_START_WIDTH = 190.0f;
+    const float ROOM_GAME_START_HEIGHT = 190.0f / 3.0f;
     int previewCharacter = -1; // -1이면 서버 값을 보되, 내 미선택은 Steve로 표시한다.
     const float CHARACTER_ARROW_LEFT_X = 210.0f;
     const float CHARACTER_ARROW_RIGHT_X = 430.0f;

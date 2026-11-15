@@ -1,6 +1,7 @@
 ﻿#include "GameClient.h"
 
 #include <cstddef>
+#include <cmath>
 #include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
 
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
@@ -29,6 +30,7 @@ bool GameClient::Init(const char* ip)
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    ClearWorld();
     // [11.12] 시작할 때 참가자와 캐릭터 선택을 비운다.
     for (RoomPlayerInfo& player : roomPlayers) {
         player = {};
@@ -51,6 +53,8 @@ void GameClient::Shutdown()
 {
     network.Shutdown();
 }
+
+
 
 // [11.4] 서버 IP로 실제 접속을 시도하는 함수
 bool GameClient::TryConnect()
@@ -79,6 +83,7 @@ bool GameClient::TryConnect()
 void GameClient::HandleDisconnect()
 {
     network.Disconnect(); // [11.9] 소켓과 송수신 버퍼를 비운다.
+    ClearWorld();
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
@@ -206,6 +211,12 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         }
     }
 
+    if (request[1] == C2S_GAME_START &&
+        (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_GameStart))) {
+        errorMessage = "Invalid game start request.";
+        return false;
+    }
+
     request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
     if (!network.QueuePacket(request)) {
         HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.
@@ -213,6 +224,7 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
     }
     // [11.12] 퇴장 응답 패킷이 없으므로 등록 성공 후 로비로 돌아간다.
     if (request[1] == C2S_LEAVE_ROOM) {
+        ClearWorld();
         myRoomId = -1;
         mySlot = -1;
         for (RoomPlayerInfo& player : roomPlayers) {
@@ -261,6 +273,49 @@ void GameClient::PollNetwork()
         return;
     }
 }
+
+void GameClient::ClearWorld()
+{
+    objects.clear();
+    for (int& playerHp : hp) {
+        playerHp = 0;
+    }
+    gameStartResult = {};
+    for (CHARACTER_TYPE& character : gameStartResult.character) {
+        character = CHAR_NONE;
+    }
+}
+
+void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
+{
+    if (!result.success) {
+        errorMessage = "Game could not start. Check players and character selections.";
+        return;
+    }
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        if ((result.character[slot] != CHAR_STEVE && result.character[slot] != CHAR_ALEX) ||
+            !std::isfinite(result.x[slot]) || !std::isfinite(result.y[slot]) ||
+            !std::isfinite(result.z[slot])) {
+            HandleDisconnect();
+            return;
+        }
+    }
+    ClearWorld();
+    gameStartResult = result;
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        ClientObject player{};
+        player.objectId = slot;
+        player.type = OBJ_CHARACTER;
+        player.character = result.character[slot];
+        player.renderPos = glm::vec3(result.x[slot], result.y[slot], result.z[slot]);
+        objects[slot] = player;
+        hp[slot] = MAX_HP;
+    }
+    inputHandler.Reset();
+    errorMessage.clear();
+    currentState = CLIENT_PLAYING;
+}
+
 
 // [11.5]패킷 검사와 종류 구분
 void GameClient::ProcessPacket(const unsigned char* packet)
@@ -324,6 +379,17 @@ void GameClient::ProcessPacket(const unsigned char* packet)
     }
 
     // 종류와 길이를 확인했다.
+    if (packet[1] == S2C_GAME_START_RESULT && currentState == CLIENT_ROOM) {
+        const unsigned char success = packet[offsetof(S2C_GameStartResult, success)];
+        if (success > 1) {
+            HandleDisconnect();
+            return;
+        }
+        S2C_GameStartResult result{};
+        std::memcpy(&result, packet, sizeof(result));
+        HandleGameStartResult(result);
+        return;
+    }
     // [11.7] 로그인 성공 응답을 받은 뒤에만 로비로 이동한다.
     if (packet[1] == S2C_LOGIN_RESULT && currentState == CLIENT_LOGIN) {
         S2C_LoginResult result{};
@@ -359,6 +425,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
             }
             myRoomId = result.room_id;
             mySlot = result.my_slot;
+            ClearWorld();
             // [11.12] 새 방의 참가자 정보를 받을 준비를 한다.
             for (RoomPlayerInfo& player : roomPlayers) {
                 player = {};
