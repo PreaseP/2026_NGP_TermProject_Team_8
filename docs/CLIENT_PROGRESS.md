@@ -770,3 +770,7 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 ## 2026-11-16 커밋 정리 2
 
 - 로그인 화면에서 서버 IPv4 주소를 입력하고 START 또는 Enter로 해당 주소에 접속하도록 연결한다. 클릭과 Tab으로 입력칸을 바꾸고 Ctrl+A로 주소를 선택할 수 있다. 기본 테스트 주소 127.0.0.1은 유지한다.
+
+## 2026-11-16 커밋 정리 3
+
+- 로그인 화면에 NICKNAME과 SERVER IP를 표시하고, 빈 닉네임 입력칸에는 Enter your nickname을 표시해 두 입력칸을 구분한다.

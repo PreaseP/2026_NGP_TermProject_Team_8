@@ -592,11 +592,23 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
         }
         panel(shader, LOGIN_INPUT_X, LOGIN_NAME_Y, LOGIN_INPUT_WIDTH, LOGIN_NAME_HEIGHT,
             0.035f, 0.075f, 0.11f, 0.9f);
+        panel(shader, LOGIN_INPUT_X, LOGIN_NAME_Y - 24, 125, 20,
+            0.035f, 0.075f, 0.11f, 0.95f);
+        centeredText(shader, "NICKNAME", LOGIN_NAME_Y - 8, 0.7f, 0.92f, 1, 14.0f,
+            LOGIN_INPUT_X + 62.5f);
         std::string display = name;
-        if (!serverFocused && blink) display += "_";
-        centeredText(shader, display, LOGIN_NAME_Y + 30, 1, 1, 1);
-        panel(shader, 510, LOGIN_SERVER_Y - 27, 180, 24, 0.035f, 0.075f, 0.11f, 0.92f);
-        centeredText(shader, "Server IPv4 :9000", LOGIN_SERVER_Y - 10, 0.85f, 0.93f, 1, 14.0f);
+        if (display.empty()) {
+            centeredText(shader, "Enter your nickname", LOGIN_NAME_Y + 30,
+                0.58f, 0.69f, 0.75f, 18.0f);
+        }
+        else {
+            if (!serverFocused && blink) display += "_";
+            centeredText(shader, display, LOGIN_NAME_Y + 30, 1, 1, 1);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_SERVER_Y - 24, 125, 20,
+            0.035f, 0.075f, 0.11f, 0.95f);
+        centeredText(shader, "SERVER IP", LOGIN_SERVER_Y - 8, 0.7f, 0.92f, 1, 14.0f,
+            LOGIN_INPUT_X + 62.5f);
         if (serverFocused) {
             panel(shader, LOGIN_INPUT_X - 2, LOGIN_SERVER_Y - 2, LOGIN_INPUT_WIDTH + 4,
                 LOGIN_SERVER_HEIGHT + 4, 0.15f, 0.7f, 0.85f, 0.9f);
