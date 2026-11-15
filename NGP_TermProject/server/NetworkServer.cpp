@@ -47,12 +47,15 @@ void NetworkServer::RunLoop()
 {
 	while (running.load()) {
 		WSAPOLLFD pollSockets[MAX_CONNECTIONS + 1]{};
+		NetSession* polledSessions[MAX_CONNECTIONS + 1]{};
 		pollSockets[0] = { listenSocket, POLLRDNORM, 0 };
 		ULONG socketCount = 1;
 
-		for (const NetSession& session : sessions) {
+		for (NetSession& session : sessions) {
 			if (session.inUse) {
-				pollSockets[socketCount++] = { session.socket, session.GetPollEvents(), 0 };
+				pollSockets[socketCount] = { session.socket, session.GetPollEvents(), 0 };
+				polledSessions[socketCount] = &session;
+				++socketCount;
 			}
 		}
 
@@ -63,10 +66,103 @@ void NetworkServer::RunLoop()
 			break;
 		}
 
-		if (readyCount > 0 && running.load()) {
-			// 11/15 이벤트 분기 연결 전까지 같은 이벤트를 반복 감시할 때 CPU 사용을 제한.
-			Sleep(POLL_TIMEOUT_MS);
+		if (!running.load()) {
+			break;
 		}
+		if (readyCount == 0) {
+			continue;
+		}
+
+		const short listenEvents = pollSockets[0].revents;
+		constexpr short socketErrors = POLLERR | POLLNVAL;
+		if (listenEvents & (socketErrors | POLLHUP)) {
+			std::fprintf(stderr, "Listening socket failed (poll flags: %d).\n", listenEvents);
+			Stop();
+			break;
+		}
+
+		if ((listenEvents & POLLRDNORM) && running.load()) {
+			AcceptClients();
+		}
+
+		for (ULONG i = 1; i < socketCount && running.load(); ++i) {
+			const short events = pollSockets[i].revents;
+			NetSession* session = polledSessions[i];
+
+			if (events & socketErrors) {
+				DisconnectClient(session);
+				continue;
+			}
+
+			if (events & POLLRDNORM) {
+				const NET_RESULT result = session->ReceivePackets(recvQueue, true);
+				if (result == NET_CLOSED || result == NET_ERROR) {
+					DisconnectClient(session);
+					continue;
+				}
+			}
+			else if (events & POLLHUP) {
+				DisconnectClient(session);
+				continue;
+			}
+
+			if (events & POLLWRNORM) {
+				const NET_RESULT result = session->FlushSendBuffer();
+				if (result == NET_CLOSED || result == NET_ERROR) {
+					DisconnectClient(session);
+				}
+			}
+		}
+	}
+}
+
+void NetworkServer::AcceptClients()
+{
+	while (running.load()) {
+		const SOCKET clientSocket = accept(listenSocket, nullptr, nullptr);
+		if (clientSocket == INVALID_SOCKET) {
+			const int error = WSAGetLastError();
+			if (error != WSAEWOULDBLOCK) {
+				std::fprintf(stderr, "accept failed: %d\n", error);
+			}
+			return;
+		}
+
+		NetSession* freeSlot = nullptr;
+		for (NetSession& session : sessions) {
+			if (!session.inUse) {
+				freeSlot = &session;
+				break;
+			}
+		}
+
+		if (freeSlot == nullptr || nextSessionId == INT_MAX) {
+			closesocket(clientSocket);
+			continue;
+		}
+
+		const int keepAlive = 1;
+		if (!NetUtil::ConfigureSocket(clientSocket, true)
+			|| setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE,
+				reinterpret_cast<const char*>(&keepAlive), sizeof(keepAlive)) == SOCKET_ERROR) {
+			std::fprintf(stderr, "Client socket setup failed: %d\n", WSAGetLastError());
+			closesocket(clientSocket);
+			continue;
+		}
+
+		freeSlot->Init(clientSocket, nextSessionId);
+
+		RecvEvent event{};
+		event.kind = RECV_EVENT_CONNECTED;
+		event.sessionId = nextSessionId;
+		if (!recvQueue->Enqueue(event, true)) {
+			std::fprintf(stderr, "Failed to queue connection for session %d.\n", event.sessionId);
+			closesocket(clientSocket);
+			*freeSlot = NetSession{};
+			return;
+		}
+
+		++nextSessionId;
 	}
 }
 

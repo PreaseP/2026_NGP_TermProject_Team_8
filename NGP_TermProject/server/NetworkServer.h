@@ -13,6 +13,7 @@ private:
 	SendRequestQueue* sendQueue = nullptr;
 	std::atomic<bool> running{false};
 
+	void AcceptClients();
 	void DisconnectClient(NetSession* session);
 
 public:
