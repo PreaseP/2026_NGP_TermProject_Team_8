@@ -9,7 +9,7 @@ struct RoomPlayerInfo; // [11.12] 화면에서 읽을 참가자 정보
 enum class GameState {
     TITLE_SCREEN,
     FIRST_PERSON_MODE,
-    THIRD_PERSON_MODE,
+    // THIRD_PERSON_MODE,
     FINISH_SCREEN
 };
 

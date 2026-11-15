@@ -62,7 +62,7 @@ static TitleScreen titleScreen;
 static FinishScreen finishScreen;
 static Winner winner = Winner::NONE;
 
-static Camera camera;
+// static Camera camera;
 static Steve_Camera steveCamera;
 static Alex_Camera alexCamera;
 static LightManager lightManager;
@@ -108,7 +108,7 @@ static bool alexThrowFlag = false;
 static glm::vec3 stevePosition = glm::vec3(3.0f, 0.8f, 5.0f);
 static glm::vec3 alexPosition = glm::vec3(7.0f, 0.8f, 5.0f);
 
-static bool splitScreenMode = false;
+// static bool splitScreenMode = false;
 
 bool cameraLightMode = true;
 enum CharacterSelection { STEVE, ALEX };
@@ -157,7 +157,7 @@ void TimerFunction(int value);
 
 void make_shaderProgram();
 GLvoid Drawscene();
-GLvoid drawSplitScreen();
+// GLvoid drawSplitScreen();
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection);
 GLvoid Reshape(int w, int h);
 
@@ -173,7 +173,7 @@ void initializeFaceBuffers();
 void loadFaceTextures();
 GLuint loadTexture(const char* path);
 void renderCharacterFace(GLuint textureID, float x, float y, float size, int screenWidth, int screenHeight);
-void drawCharacterFaces(int winW, int winH);
+// void drawCharacterFaces(int winW, int winH);
 
 //--- 셰이더 관련 변수들
 GLint width, height;
@@ -450,28 +450,22 @@ void renderCharacterFace(GLuint textureID, float x, float y, float size, int scr
 	glDisable(GL_BLEND);
 }
 
-void drawCharacterFaces(int winW, int winH)
-{
-	if (!splitScreenMode || currentGameState != GameState::FIRST_PERSON_MODE) return;
-	if (!faceTexturesLoaded) return;
-
-	const float faceSize = 40.0f;
-	const float margin = 40.0f;
-
-	float steveX = margin;
-	float steveY = winH - faceSize - margin;
-
-	float alexX = margin;
-	float alexY = winH - faceSize - margin;
-
-	glViewport(0, 0, winW / 2, winH);
-	renderCharacterFace(steveFaceTextureID, steveX, steveY, faceSize, winW / 2, winH);
-
-	glViewport(winW / 2, 0, winW - winW / 2, winH);
-	renderCharacterFace(alexFaceTextureID, alexX, alexY, faceSize, winW - winW / 2, winH);
-
-	glViewport(0, 0, winW, winH);
-}
+// void drawCharacterFaces(int winW, int winH)
+// {
+// 	if (!splitScreenMode || currentGameState != GameState::FIRST_PERSON_MODE) return;
+// 	if (!faceTexturesLoaded) return;
+// 	const float faceSize = 40.0f;
+// 	const float margin = 40.0f;
+// 	float steveX = margin;
+// 	float steveY = winH - faceSize - margin;
+// 	float alexX = margin;
+// 	float alexY = winH - faceSize - margin;
+// 	glViewport(0, 0, winW / 2, winH);
+// 	renderCharacterFace(steveFaceTextureID, steveX, steveY, faceSize, winW / 2, winH);
+// 	glViewport(winW / 2, 0, winW - winW / 2, winH);
+// 	renderCharacterFace(alexFaceTextureID, alexX, alexY, faceSize, winW - winW / 2, winH);
+// 	glViewport(0, 0, winW, winH);
+// }
 
 void initializeGame() {
 	lightManager.setupDefaultLighting();
@@ -491,23 +485,24 @@ void initializeGame() {
 	initializeFaceBuffers();
 	loadFaceTextures();
 
-	if (currentGameState == GameState::FIRST_PERSON_MODE) {
-		splitScreenMode = true;
-		std::cout << "\n=== 1인칭 모드 조작법 ===" << std::endl;
-		std::cout << "V: 분할 화면 모드 토글" << std::endl;
-		std::cout << "WASD: Steve 1인칭 시점 회전" << std::endl;
-		std::cout << "화살표 키: Alex 1인칭 시점 회전" << std::endl;
-		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
-		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
-	}
-	else {
-		splitScreenMode = false;
-		std::cout << "\n=== 3인칭 모드 조작법 ===" << std::endl;
-		std::cout << "V: 분할 화면 모드 토글" << std::endl;
-		std::cout << "화살표 키: 카메라 회전" << std::endl;
-		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
-		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
-	}
+// 	if (currentGameState == GameState::FIRST_PERSON_MODE) {
+// 		splitScreenMode = true;
+// 		std::cout << "\n=== 1인칭 모드 조작법 ===" << std::endl;
+// 		std::cout << "V: 분할 화면 모드 토글" << std::endl;
+// 		std::cout << "WASD: Steve 1인칭 시점 회전" << std::endl;
+// 		std::cout << "화살표 키: Alex 1인칭 시점 회전" << std::endl;
+// 		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
+// 		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
+// 	}
+// 	else {
+// 		splitScreenMode = false;
+// 		std::cout << "\n=== 3인칭 모드 조작법 ===" << std::endl;
+// 		std::cout << "V: 분할 화면 모드 토글" << std::endl;
+// 		std::cout << "화살표 키: 카메라 회전" << std::endl;
+// 		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
+// 		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
+// 	}
+
 	std::cout << "E: Steve 눈덩이 발사" << std::endl;
 	std::cout << "O: Alex 눈덩이 발사" << std::endl;
 	std::cout << "X: 모든 눈 제거" << std::endl;
@@ -563,10 +558,11 @@ void Keyboard(unsigned char key, int x, int y)
 	input.pressKey(static_cast<int>(key));
 
 	switch (key) {
-	case 'v': case 'V':
-		splitScreenMode = !splitScreenMode;
-		std::cout << "분할 화면 모드: " << (splitScreenMode ? "ON" : "OFF") << std::endl;
-		break;
+// 	case 'v': case 'V':
+// 		splitScreenMode = !splitScreenMode;
+// 		std::cout << "분할 화면 모드: " << (splitScreenMode ? "ON" : "OFF") << std::endl;
+// 		break;
+
 	case 9:
 		activeCharacter = (activeCharacter == STEVE) ? ALEX : STEVE;
 		std::cout << "현재 선택된 캐릭터: " << (activeCharacter == STEVE ? "Steve" : "Alex") << std::endl;
@@ -737,13 +733,14 @@ void SpecialKeyboard(int key, int x, int y)
 
 	input.pressSpecial(key);
 
-	float deltaTime = 0.016f;
-	if (!splitScreenMode || currentGameState == GameState::THIRD_PERSON_MODE) {
-		camera.processSpecialKeyboard(key);
-		cameraPos = camera.position;
-		cameraFront = camera.front;
-		cameraUp = camera.up;
-	}
+// 	float deltaTime = 0.016f;
+// 	if (!splitScreenMode || currentGameState == GameState::THIRD_PERSON_MODE) {
+// 		camera.processSpecialKeyboard(key);
+// 		cameraPos = camera.position;
+// 		cameraFront = camera.front;
+// 		cameraUp = camera.up;
+// 	}
+
 	glutPostRedisplay();
 }
 
@@ -759,7 +756,7 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void OnMouseButton(int button, int state, int x, int y)
 {
-	if (gameClient.GetState() == CLIENT_PLAYING) return;
+    if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
@@ -821,29 +818,30 @@ void OnMouseButton(int button, int state, int x, int y)
 		return;
 	}
 
-	// 마우스 휠로 줌 인/아웃
-	if (button == 3) { // 휠 위로
-		if (splitScreenMode) {
-			steveCamera.processMouseScroll(1);
-			alexCamera.processMouseScroll(1);
-		}
-		else {
-			camera.processMouseScroll(1);
-			cameraPos = camera.position;
-		}
-		glutPostRedisplay();
-	}
-	else if (button == 4) { // 휠 아래로
-		if (splitScreenMode) {
-			steveCamera.processMouseScroll(-1);
-			alexCamera.processMouseScroll(-1);
-		}
-		else {
-			camera.processMouseScroll(-1);
-			cameraPos = camera.position;
-		}
-		glutPostRedisplay();
-	}
+// 	// 마우스 휠로 줌 인/아웃
+// 	if (button == 3) { // 휠 위로
+// 		if (splitScreenMode) {
+// 			steveCamera.processMouseScroll(1);
+// 			alexCamera.processMouseScroll(1);
+// 		}
+// 		else {
+// 			camera.processMouseScroll(1);
+// 			cameraPos = camera.position;
+// 		}
+// 		glutPostRedisplay();
+// 	}
+// 	else if (button == 4) { // 휠 아래로
+// 		if (splitScreenMode) {
+// 			steveCamera.processMouseScroll(-1);
+// 			alexCamera.processMouseScroll(-1);
+// 		}
+// 		else {
+// 			camera.processMouseScroll(-1);
+// 			cameraPos = camera.position;
+// 		}
+// 		glutPostRedisplay();
+// 	}
+
 }
 
 void OnMouseMove(int x, int y)
@@ -1030,10 +1028,9 @@ GLvoid Drawscene()
 	glutSwapBuffers();
 }
 
-GLvoid drawSplitScreen() 
-{
-	
-}
+// GLvoid drawSplitScreen()
+// {
+// }
 
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 {
@@ -1109,40 +1106,38 @@ GLvoid Reshape(int w, int h)
 	glViewport(0, 0, w, h);
 }
 
-void updateStevePosition(float deltaTime)
-{
-	steve->moveDir = glm::vec2(0.0f, 0.0f);
-
-	if (splitScreenMode) {
-		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.y += 1.0f;
-		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.y += -1.0f;
-		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.x += 1.0f;
-		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.x += -1.0f;
-	}
-	else {
-		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.x += 1.0f;
-		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.x += -1.0f;
-		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.y += -1.0f;
-		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.y += 1.0f;
-	}
-}
-
-void updateAlexPosition(float deltaTime)
-{
-	alex->moveDir = glm::vec2(0.0f, 0.0f);
-	if (splitScreenMode) {
-		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.y += -1.0f;
-		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.y += 1.0f;
-		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.x += -1.0f;
-		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.x += 1.0f;
-	}
-	else {
-		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.x += 1.0f;
-		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.x += -1.0f;
-		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.y += -1.0f;
-		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.y += 1.0f;
-	}
-}
+// void updateStevePosition(float deltaTime)
+// {
+// 	steve->moveDir = glm::vec2(0.0f, 0.0f);
+// 	if (splitScreenMode) {
+// 		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.y += 1.0f;
+// 		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.x += -1.0f;
+// 	}
+// 	else {
+// 		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.y += 1.0f;
+// 	}
+// }
+// void updateAlexPosition(float deltaTime)
+// {
+// 	alex->moveDir = glm::vec2(0.0f, 0.0f);
+// 	if (splitScreenMode) {
+// 		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.y += 1.0f;
+// 		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.x += 1.0f;
+// 	}
+// 	else {
+// 		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.y += 1.0f;
+// 	}
+// }
 
 void checkSteveMoving()
 {
@@ -1198,8 +1193,8 @@ void TimerFunction(int value)
 	}
 
 	// 캐릭터 업데이트
-	updateStevePosition(deltaTime);
-	updateAlexPosition(deltaTime);
+	// updateStevePosition(deltaTime);
+	// updateAlexPosition(deltaTime);
 
 	if (steve) steve->update(gameMap, snowSystem);
 	if (alex) alex->update(gameMap, snowSystem);
@@ -1207,9 +1202,9 @@ void TimerFunction(int value)
 	checkSteveMoving();
 	checkAlexMoving();
 
-	cameraPos = camera.position;
-	cameraFront = camera.front;
-	cameraUp = camera.up;
+	// cameraPos = camera.position;
+	// cameraFront = camera.front;
+	// cameraUp = camera.up;
 
 	glutPostRedisplay();
 	glutTimerFunc(16, TimerFunction, 1);

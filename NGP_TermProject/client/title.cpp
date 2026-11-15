@@ -204,9 +204,9 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
     case '1':
         std::cout << "1인칭 모드로 게임 시작!" << std::endl;
         return GameState::FIRST_PERSON_MODE;
-    case '3':
-        std::cout << "3인칭 모드로 게임 시작!" << std::endl;
-        return GameState::THIRD_PERSON_MODE;
+    //     case '3':
+    //         std::cout << "3인칭 모드로 게임 시작!" << std::endl;
+    //         return GameState::THIRD_PERSON_MODE;
     default:
         return GameState::TITLE_SCREEN;
     }
