@@ -66,4 +66,8 @@ public:
     void SendMoveObject(int objectId, const glm::vec3& pos) const; // 오브젝트 이동 좌표 전송
     static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
+    void SetMoveKeys(int slot, unsigned char keys);
+    void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
+    bool MoveCharacter(int slot, float dt);
+    void UpdateArmState(int slot, ULONGLONG now);
 };

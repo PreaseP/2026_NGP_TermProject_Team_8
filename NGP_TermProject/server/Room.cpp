@@ -1,4 +1,6 @@
 #include "Room.h"
+#include <cmath>
+#include <algorithm>
 #include "GameServer.h"
 
 void Room::Init(int id, GameServer* owner)
@@ -188,4 +190,85 @@ bool Room::IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const
         }
     }
     return false;
+}
+
+void Room::SetMoveKeys(int slot, unsigned char keys)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+
+    players[slot].moveKeys = keys & MOVE_KEY_MASK;
+}
+
+void Room::UpdateCharacters(ULONGLONG now, float dt)
+{
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        if (playerSessionIds[slot] == INVALID_ID)
+            continue;
+
+        if (MoveCharacter(slot, dt))
+            SendMoveObject(slot, players[slot].pos);
+
+        UpdateArmState(slot, now);
+    }
+}
+
+bool Room::MoveCharacter(int slot, float dt)
+{
+    PlayerState& player = players[slot];
+    if (player.moveKeys == 0 || player.character == CHAR_NONE)
+        return false;
+
+    float forward = 0.0f;
+    float right = 0.0f;
+    if (player.moveKeys & KEY_FORWARD) forward += 1.0f;
+    if (player.moveKeys & KEY_BACK)    forward -= 1.0f;
+    if (player.moveKeys & KEY_RIGHT)   right += 1.0f;
+    if (player.moveKeys & KEY_LEFT)    right -= 1.0f;
+
+    float dx = -FORWARD_Z[slot] * right;
+    float dz = FORWARD_Z[slot] * forward;
+    const float length = std::sqrt(dx * dx + dz * dz);
+    if (length == 0.0f)
+        return false;
+
+    const CharacterStats& stats = CHARACTER_STATS[player.character];
+    const float step = stats.moveSpeed * dt / length;
+    dx *= step;
+    dz *= step;
+
+    const float halfX = stats.bbox.x * 0.5f;
+    const float halfZ = stats.bbox.z * 0.5f;
+    const glm::vec3 before = player.pos;
+
+    glm::vec3 next = player.pos;
+    next.x = std::clamp(player.pos.x + dx, halfX, MAP_WIDTH * BLOCK_SIZE - halfX);
+    if (!IsBlockedByWall(next, stats.bbox))
+        player.pos.x = next.x;
+
+    next = player.pos;
+    next.z = std::clamp(player.pos.z + dz, halfZ, MAP_DEPTH * BLOCK_SIZE - halfZ);
+    if (!IsBlockedByWall(next, stats.bbox))
+        player.pos.z = next.z;
+
+    return player.pos != before;
+}
+
+void Room::UpdateArmState(int slot, ULONGLONG now)
+{
+    PlayerState& player = players[slot];
+
+    ARM_STATE next = ARM_IDLE;
+    if (now < player.throwEndMs)
+        next = ARM_THROW;
+    else if (player.charging)
+        next = ARM_CHARGE;
+    else if (player.moveKeys != 0)
+        next = ARM_RUN;
+
+    if (next == player.armState)
+        return;
+
+    player.armState = next;
+    SendStatusChange(slot, STATUS_ARM_STATE, static_cast<float>(next));
 }

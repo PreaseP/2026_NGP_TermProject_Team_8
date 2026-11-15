@@ -104,6 +104,9 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
     case C2S_SELECT_CHARACTER:
         HandleSelectCharacter(session, *reinterpret_cast<const C2S_SelectCharacter*>(data));
         break;
+    case C2S_MOVE:
+        HandleMove(session, *reinterpret_cast<const C2S_Move*>(data));
+        break;
     case C2S_GAME_START:
         HandleGameStart(session, *reinterpret_cast<const C2S_GameStart*>(data));
         break;
@@ -281,4 +284,34 @@ void GameServer::SendRoomList(int sessionId)
     S2C_RoomList roomList{};
     BuildRoomList(&roomList);
     SendPacket(sessionId, &roomList);
+}
+
+void GameServer::HandleMove(GameSession* session, const C2S_Move& packet)
+{
+    if (session->roomId == INVALID_ID)
+        return;
+
+    rooms[session->roomId].SetMoveKeys(session->slot, packet.move_keys);
+}
+
+DWORD GameServer::ThreadMain()
+{
+    ULONGLONG lastTick = GetTickCount64();
+
+    while (WaitForSingleObject(server.stopEvent, 1) == WAIT_TIMEOUT) {
+        ProcessRecvEvents();
+
+        const ULONGLONG now = GetTickCount64();
+        if (now - lastTick < TICK_MS)
+            continue;
+
+        const float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        lastTick = now;
+
+        for (Room& room : rooms) {
+            if (room.state == ROOM_PLAYING)
+                room.UpdateCharacters(now, dt);
+        }
+    }
+    return 0;
 }

@@ -31,6 +31,7 @@ public:
     void HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet); // 방 입장 요청 처리
     void HandleSelectCharacter(GameSession* session, const C2S_SelectCharacter& packet);
     void HandleGameStart(GameSession* session, const C2S_GameStart& packet);
+    void HandleMove(GameSession* session, const C2S_Move& packet);
     void LeaveRoomInternal(GameSession* session); // 방 퇴장 처리
     GameSession* FindGameSession(int sessionId); // 연결 번호로 게임 세션 찾기
     bool IsValidName(const char* name);
