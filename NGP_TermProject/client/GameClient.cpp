@@ -26,6 +26,7 @@ bool GameClient::Init(const char* ip)
         return false;
     }
 
+    inputHandler.SetServerAddress(serverIp.c_str());
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
@@ -54,7 +55,26 @@ void GameClient::Shutdown()
     network.Shutdown();
 }
 
-
+bool GameClient::SetServerAddress(const char* address)
+{
+    if (currentState != CLIENT_LOGIN) {
+        errorMessage = "Server address can only be changed before login.";
+        return false;
+    }
+    in_addr parsed{};
+    if (address == nullptr || inet_pton(AF_INET, address, &parsed) != 1) {
+        nameErrorEffect = false;
+        errorMessage = "Enter a valid server IPv4 address.";
+        return false;
+    }
+    if (serverIp != address) {
+        network.Disconnect();
+        serverIp = address;
+    }
+    inputHandler.SetServerAddress(serverIp.c_str());
+    errorMessage.clear();
+    return true;
+}
 
 // [11.4] 서버 IP로 실제 접속을 시도하는 함수
 bool GameClient::TryConnect()
@@ -100,6 +120,7 @@ void GameClient::HandleDisconnect()
     roomCount = 0;
     selectedRoomIndex = 0; // [11.11] 이전 방 선택도 비운다.
     inputHandler = InputHandler{this}; // [11.9] 닉네임과 이동·공격 입력을 모두 비운다.
+    inputHandler.SetServerAddress(serverIp.c_str());
     nameErrorEffect = false;
     errorMessage = "Connection lost. Enter your nickname and press GAME START.";
 }

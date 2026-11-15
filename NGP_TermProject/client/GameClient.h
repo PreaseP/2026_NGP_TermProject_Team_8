@@ -19,6 +19,11 @@ struct ClientObject {
 class GameClient {
 public:
     const char* GetName() const { return inputHandler.GetName(); } // [11.7] 로그인 화면 표시
+    const char* GetServerAddress() const { return inputHandler.GetServerAddress(); }
+    bool IsServerAddressFocused() const { return inputHandler.IsServerAddressFocused(); }
+    bool IsServerAddressSelected() const { return inputHandler.IsServerAddressSelected(); }
+    void FocusServerAddress(bool focus) { inputHandler.FocusServerAddress(focus); }
+    bool SetServerAddress(const char* address);
     const std::string& GetErrorMessage() const { return errorMessage; } // [11.7] 실패 이유 표시
     int GetMyRoomId() const { return myRoomId; } // [11.11] 입장한 방 번호
     int GetMySlot() const { return mySlot; } // [11.11] 서버가 지정한 자리 번호

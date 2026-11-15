@@ -292,14 +292,8 @@ int main(int argc, char** argv)
 	}
 
 	// [11.6] 일단 같은 PC의 서버에 접속한다. 팀 서버 연결 시 주소 변경
-	if (!gameClient.Init("127.0.0.1")) {
+	if (!gameClient.Init(gameClient.GetServerAddress())) {
 		std::cerr << "클라이언트 네트워크 초기화 실패" << std::endl;
-	}
-	else if (!gameClient.TryConnect()) {
-		std::cerr << "서버 접속 실패" << std::endl;
-	}
-	else {
-		std::cout << "서버 접속 완료" << std::endl;
 	}
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
@@ -768,9 +762,18 @@ void OnMouseButton(int button, int state, int x, int y)
 	if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
-		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
-			titleScreen.hitsStart(x, y, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))) {
-			gameClient.OnKeyDown('\r'); // 엔터키랑 같은 처리
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+			const int width = glutGet(GLUT_WINDOW_WIDTH);
+			const int height = glutGet(GLUT_WINDOW_HEIGHT);
+			if (titleScreen.IsMouseOverLoginInput(x, y, width, height, true)) {
+				gameClient.FocusServerAddress(true);
+			}
+			else if (titleScreen.IsMouseOverLoginInput(x, y, width, height, false)) {
+				gameClient.FocusServerAddress(false);
+			}
+			else if (titleScreen.hitsStart(x, y, width, height)) {
+				gameClient.OnKeyDown('\r'); // 엔터키랑 같은 처리
+			}
 		}
 		glutPostRedisplay();
 		return;
@@ -968,7 +971,8 @@ GLvoid Drawscene()
 		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
 		titleScreen.render(shaderProgramID);
 		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
-			gameClient.GetState() == CLIENT_LOBBY);
+			gameClient.GetState() == CLIENT_LOBBY, gameClient.GetServerAddress(),
+			gameClient.IsServerAddressFocused(), gameClient.IsServerAddressSelected());
 		glutSwapBuffers();
 		return;
 	}

@@ -27,7 +27,9 @@ public:
     GameState handleKeyInput(unsigned char key) const;
     void cleanup();
     // [11.7] 로그인 입력·버튼과 로그인 성공 후 로비 안내를 그린다.
-    void renderLoginUI(GLuint shaderProgram, const char* name, const std::string& error, bool lobby) const;
+    void renderLoginUI(GLuint shaderProgram, const char* name, const std::string& error, bool lobby,
+        const char* serverAddress, bool serverFocused, bool serverSelected) const;
+    bool IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const;
     bool hitsStart(int x, int y, int width, int height) const;
     // [11.12] 마우스 위치를 기억하고 나가기 버튼 안인지 확인한다.
     void SetMousePosition(int x, int y);
@@ -116,5 +118,11 @@ private:
     const float ROOM_BACK_X = 40.0f;
     const float ROOM_BACK_Y = 40.0f;
     const float ROOM_BACK_SIZE = 80.0f;
+    const float LOGIN_INPUT_X = 420.0f;
+    const float LOGIN_INPUT_WIDTH = 360.0f;
+    const float LOGIN_NAME_Y = 350.0f;
+    const float LOGIN_NAME_HEIGHT = 50.0f;
+    const float LOGIN_SERVER_Y = 430.0f;
+    const float LOGIN_SERVER_HEIGHT = 45.0f;
     bool textureLoaded = false;
 };

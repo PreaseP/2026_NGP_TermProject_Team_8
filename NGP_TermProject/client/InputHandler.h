@@ -8,6 +8,14 @@ class GameClient;
 class InputHandler {
 public:
     const char* GetName() const { return nameBuffer; } // [11.7] 화면에 입력 중인 닉네임을 보여 준다.
+    const char* GetServerAddress() const { return serverAddress; }
+    bool IsServerAddressFocused() const { return serverAddressFocused; }
+    bool IsServerAddressSelected() const { return serverAddressSelected; }
+    void FocusServerAddress(bool focus) {
+        serverAddressFocused = focus;
+        serverAddressSelected = focus;
+    }
+    void SetServerAddress(const char* address);
     // [11.6] 입력으로 만든 요청을 전달할 GameClient를 기억한다.
     explicit InputHandler(GameClient* target) : game(target) {}
     // [11.11] 로비에서는 Enter로 현재 선택한 방의 입장을 요청한다.
@@ -20,6 +28,10 @@ private:
     bool attackPressed = false; // [11.6] 공격 버튼을 누르고 있는지 기록
     char nameBuffer[MAX_NAME_LEN]{}; // [11.6] 입력할 닉네임.
     int nameLength = 0; // [11.6] 입력한 닉네임의 글자 수
+    char serverAddress[16] = "127.0.0.1";
+    int serverAddressLength = 9;
+    bool serverAddressFocused = false;
+    bool serverAddressSelected = false;
 };
 
 /*

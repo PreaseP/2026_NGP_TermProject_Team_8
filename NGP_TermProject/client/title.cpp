@@ -557,7 +557,8 @@ bool TitleScreen::IsMouseOverGameStartButton(int x, int y, int width, int height
         py >= ROOM_GAME_START_Y && py < ROOM_GAME_START_Y + ROOM_GAME_START_HEIGHT;
 }
 
-void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
+void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby,
+    const char* serverAddress, bool serverFocused, bool serverSelected) const {
     // [11.7] 배경과 같은 셰이더를 사용하고, 메뉴용 투영·투명도만 설정한다.
     const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
     const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
@@ -584,10 +585,32 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     }
     else {
         // [11.7] 칸에 닉네임과 깜빡이는 커서만 표시한다.
-        panel(shader, 420, 400, 360, 50, 0.035f, 0.075f, 0.11f, 0.9f);
+        const bool blink = (glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0;
+        if (!serverFocused) {
+            panel(shader, LOGIN_INPUT_X - 2, LOGIN_NAME_Y - 2, LOGIN_INPUT_WIDTH + 4,
+                LOGIN_NAME_HEIGHT + 4, 0.15f, 0.7f, 0.85f, 0.9f);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_NAME_Y, LOGIN_INPUT_WIDTH, LOGIN_NAME_HEIGHT,
+            0.035f, 0.075f, 0.11f, 0.9f);
         std::string display = name;
-        if ((glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0) display += "_";
-        centeredText(shader, display, 430, 1, 1, 1);
+        if (!serverFocused && blink) display += "_";
+        centeredText(shader, display, LOGIN_NAME_Y + 30, 1, 1, 1);
+        panel(shader, 510, LOGIN_SERVER_Y - 27, 180, 24, 0.035f, 0.075f, 0.11f, 0.92f);
+        centeredText(shader, "Server IPv4 :9000", LOGIN_SERVER_Y - 10, 0.85f, 0.93f, 1, 14.0f);
+        if (serverFocused) {
+            panel(shader, LOGIN_INPUT_X - 2, LOGIN_SERVER_Y - 2, LOGIN_INPUT_WIDTH + 4,
+                LOGIN_SERVER_HEIGHT + 4, 0.15f, 0.7f, 0.85f, 0.9f);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_SERVER_Y, LOGIN_INPUT_WIDTH, LOGIN_SERVER_HEIGHT,
+            0.035f, 0.075f, 0.11f, 0.9f);
+        std::string address = serverAddress;
+        if (serverFocused && serverSelected && !address.empty()) {
+            const float textWidth = static_cast<float>(address.size()) * 10.5f;
+            panel(shader, 600 - textWidth / 2 - 4, LOGIN_SERVER_Y + 7,
+                textWidth + 8, 30, 0.15f, 0.4f, 0.6f, 0.9f);
+        }
+        if (serverFocused && !serverSelected && blink) address += "_";
+        centeredText(shader, address, LOGIN_SERVER_Y + 28, 1, 1, 1);
         const float halfWidth = 280.0f * startScale(), halfHeight = halfWidth / startAspect;
         // [11.7] 기존 uiColor로 붉은 기운을 주고 서서히 원래 색으로 돌린다.
         const float tint = 0.65f * startErrorStrength();
@@ -886,4 +909,14 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
     if (cullEnabled) glEnable(GL_CULL_FACE);
     if (!blendEnabled) glDisable(GL_BLEND);
     glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+}
+
+bool TitleScreen::IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    const float top = server ? LOGIN_SERVER_Y : LOGIN_NAME_Y;
+    const float inputHeight = server ? LOGIN_SERVER_HEIGHT : LOGIN_NAME_HEIGHT;
+    return px >= LOGIN_INPUT_X && px < LOGIN_INPUT_X + LOGIN_INPUT_WIDTH &&
+        py >= top && py < top + inputHeight;
 }
