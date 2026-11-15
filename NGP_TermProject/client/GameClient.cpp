@@ -230,6 +230,10 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
             errorMessage = "Invalid character selection.";
             return false;
         }
+        if (IsCharacterConfirmed()) {
+            errorMessage = "Character selection is already confirmed.";
+            return false;
+        }
     }
 
     if (request[1] == C2S_GAME_START &&

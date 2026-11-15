@@ -186,7 +186,7 @@ void TitleScreen::render(GLuint shaderProgram) const {
 
     renderText("MINECRAFT SNOWBALL FIGHT", 0.0f, 0.3f, 2.0f);
     renderText("1 - First Person Mode", 0.0f, 0.0f, 1.0f);
-    renderText("3 - Third Person Mode", 0.0f, -0.2f, 1.0f);
+    // renderText("3 - Third Person Mode", 0.0f, -0.2f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -525,6 +525,7 @@ bool TitleScreen::IsMouseOverCharacterArrow(int x, int y, int width, int height,
 // [11.14] 현재 표시 중인 캐릭터를 기준으로 Steve·Alex를 번갈아 본다.
 void TitleScreen::ChangeCharacterPreview(int direction, int serverCharacter) {
     if (direction != -1 && direction != 1) return;
+    if (serverCharacter == CHAR_STEVE || serverCharacter == CHAR_ALEX) return;
     const int current = GetPreviewCharacter(serverCharacter);
     previewCharacter = current == CHAR_STEVE ? CHAR_ALEX : CHAR_STEVE;
 }
@@ -534,8 +535,8 @@ void TitleScreen::ResetCharacterPreview() {
     previewCharacter = -1;
 }
 
-// [11.14] 로컬 선택이 없으면 서버 값을 쓰고, 미선택의 기본은 Steve다.
 int TitleScreen::GetPreviewCharacter(int serverCharacter) const {
+    if (serverCharacter == CHAR_STEVE || serverCharacter == CHAR_ALEX) return serverCharacter;
     const int character = previewCharacter >= 0 ? previewCharacter : serverCharacter;
     return character == CHAR_NONE ? CHAR_STEVE : character;
 }
@@ -555,6 +556,16 @@ bool TitleScreen::IsMouseOverGameStartButton(int x, int y, int width, int height
     const float py = y * 675.0f / height;
     return px >= ROOM_GAME_START_X && px < ROOM_GAME_START_X + ROOM_GAME_START_WIDTH &&
         py >= ROOM_GAME_START_Y && py < ROOM_GAME_START_Y + ROOM_GAME_START_HEIGHT;
+}
+
+bool TitleScreen::IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    const float top = server ? LOGIN_SERVER_Y : LOGIN_NAME_Y;
+    const float inputHeight = server ? LOGIN_SERVER_HEIGHT : LOGIN_NAME_HEIGHT;
+    return px >= LOGIN_INPUT_X && px < LOGIN_INPUT_X + LOGIN_INPUT_WIDTH &&
+        py >= top && py < top + inputHeight;
 }
 
 void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby,
@@ -787,49 +798,51 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
     // [11.12] 현재 방과 두 자리의 참가자 정보를 표시한다.
     // [11.14] 제목과 방 번호만 위쪽에 표시하고 참가자 정보는 유지한다.
     if (roomTitleTextureId != 0) {
-        drawUIQuad(shader, 450, 20, 300, 120, roomTitleTextureId, glm::vec4(1.0f));
+        drawUIQuad(shader, 480, -6, 240, 96, roomTitleTextureId, glm::vec4(1.0f));
     }
     else {
-        centeredText(shader, "WAITING ROOM", 100, 1, 1, 1, 28.0f);
+        centeredText(shader, "WAITING ROOM", 68, 1, 1, 1, 28.0f);
     }
     // [11.14] 서버 방 번호 0~2로 ROOM 1~3 이미지를 고른다.
     if (roomId >= 0 && roomId < MAX_ROOMS) {
         const GLuint numberTexture = roomNumberTextureIds[roomId];
         if (numberTexture != 0) {
-            drawUIQuad(shader, 470, 150, 260, 260.0f / 3.0f, numberTexture, glm::vec4(1.0f));
+            drawUIQuad(shader, 490, 70, 220, 220.0f / 3.0f, numberTexture, glm::vec4(1.0f));
         }
         else {
-            centeredText(shader, "ROOM " + std::to_string(roomId + 1), 205, 0.75f, 0.88f, 1, 20.0f);
+            centeredText(shader, "ROOM " + std::to_string(roomId + 1), 114, 0.75f, 0.88f, 1, 20.0f);
         }
     }
     // [11.14] 내 자리 번호와 관계없이 나는 왼쪽, 상대는 오른쪽에 표시한다.
     for (int cardIndex = 0; cardIndex < MAX_ROOM_PLAYERS; ++cardIndex) {
         const bool myCard = cardIndex == 0;
         const int playerSlot = myCard ? slot : 1 - slot;
-        const float centerX = myCard ? 350.0f : 850.0f;
+        const float centerX = myCard ? 420.0f : 780.0f;
         const GLuint frameTexture = myCard ? roomPlayerFrameTextureId : roomOpponentFrameTextureId;
         const GLuint labelTexture = myCard ? roomPlayerLabelTextureId : roomOpponentLabelTextureId;
         if (frameTexture != 0) {
-            drawUIQuad(shader, centerX - 180, 235, 360, 420, frameTexture, glm::vec4(1.0f));
+            drawUIQuad(shader, centerX - 190, 145, 380, 350, frameTexture, glm::vec4(1.0f));
         }
         else {
-            panel(shader, centerX - 155, 270, 310, 365, 0.1f, myCard ? 0.23f : 0.15f,
+            panel(shader, centerX - 165, 165, 330, 305, 0.1f, myCard ? 0.23f : 0.15f,
                 myCard ? 0.33f : 0.2f, 0.95f);
         }
         if (labelTexture != 0) {
-            drawUIQuad(shader, centerX - 100, 270, 200, 200.0f * 763.0f / 2060.0f,
+            drawUIQuad(shader, centerX - 80, 165, 160, 160.0f * 763.0f / 2060.0f,
                 labelTexture, glm::vec4(1.0f));
         }
         else {
-            centeredText(shader, myCard ? "You" : "Opponent", 325, 0.75f, 0.88f, 1, 22.0f, centerX);
+            centeredText(shader, myCard ? "You" : "Opponent", 210, 0.75f, 0.88f, 1, 22.0f, centerX);
         }
         // [11.14] 빈 자리에는 대기 문구를 표시하고 참가자 배열은 읽기만 한다.
         if (players == nullptr || slot < 0 || slot >= MAX_ROOM_PLAYERS ||
             !players[playerSlot].connected) {
-            centeredText(shader, "Waiting for player...", 405, 0.7f, 0.75f, 0.8f, 18.0f, centerX);
+            centeredText(shader, "Waiting for player...", 340, 0.7f, 0.75f, 0.8f, 18.0f, centerX);
             continue;
         }
         const RoomPlayerInfo& player = players[playerSlot];
+        const bool characterConfirmed = myCard &&
+            (player.character == CHAR_STEVE || player.character == CHAR_ALEX);
         // [11.14] 서버에서 받은 캐릭터 값으로 전신 또는 물음표를 고른다.
         GLuint characterTexture = roomCharacterUnknownTextureId;
         const char* characterText = "Selecting...";
@@ -846,19 +859,19 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
             characterText = "Alex";
             break;
         }
-        centeredText(shader, player.name, 365, 1, 1, 1, 22.0f, centerX);
+        centeredText(shader, player.name, 240, 1, 1, 1, 22.0f, centerX);
         // [11.14] 원본 비율을 유지하고 카드의 캐릭터 영역 가운데에 그린다.
         const bool characterSelected = displayCharacter == CHAR_STEVE || displayCharacter == CHAR_ALEX;
-        const float characterHeight = characterSelected ? 210.0f : 170.0f;
+        const float characterHeight = characterSelected ? 185.0f : 150.0f;
         const float characterWidth = characterHeight * (characterSelected
             ? 1393.0f / 1129.0f : 1199.0f / 1312.0f);
-        const float characterY = 380.0f + (210.0f - characterHeight) / 2.0f;
+        const float characterY = 250.0f + (185.0f - characterHeight) / 2.0f;
         if (characterTexture != 0) {
             drawUIQuad(shader, centerX - characterWidth / 2.0f, characterY,
                 characterWidth, characterHeight, characterTexture, glm::vec4(1.0f));
         }
         // [11.14] 화살표는 내 카드에만 표시한다.
-        if (myCard) {
+        if (myCard && !characterConfirmed) {
             for (int arrowIndex = 0; arrowIndex < 2; ++arrowIndex) {
                 const bool left = arrowIndex == 0;
                 const float arrowX = left ? CHARACTER_ARROW_LEFT_X : CHARACTER_ARROW_RIGHT_X;
@@ -879,8 +892,8 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
             }
         }
         // [11.14] 내 참가자 정보가 있을 때 선택 완료 버튼을 표시한다.
-        if (myCard) {
-            const bool hovered = IsMouseOverCharacterConfirm(roomPointerX, roomPointerY,
+        if (myCard && !characterConfirmed) {
+            const bool hovered = !characterConfirmed && IsMouseOverCharacterConfirm(roomPointerX, roomPointerY,
                 glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
             const GLuint confirmTexture = hovered && roomCharacterConfirmHoverTextureId != 0
                 ? roomCharacterConfirmHoverTextureId : roomCharacterConfirmTextureId;
@@ -891,7 +904,7 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
             else {
                 panel(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
                     CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
-                centeredText(shader, "Select", CHARACTER_CONFIRM_Y + 40, 1, 1, 1, 20.0f);
+                centeredText(shader, "Select", CHARACTER_CONFIRM_Y + 40, 1, 1, 1, 20.0f, 420.0f);
             }
         }
         if (myCard) {
@@ -910,7 +923,12 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
             }
         }
         // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.
-        centeredText(shader, characterText, 610, 0.85f, 0.9f, 0.95f, 18.0f, centerX);
+        centeredText(shader, characterText, 448, 0.85f, 0.9f, 0.95f, 18.0f, centerX);
+        if (myCard && !characterConfirmed && characterSelected) {
+            const char* characterInfo = displayCharacter == CHAR_STEVE
+                ? "POWER +   SPEED -" : "SPEED +   POWER -";
+            centeredText(shader, characterInfo, 465, 0.7f, 0.88f, 1.0f, 12.0f, centerX);
+        }
     }
 
     // [11.11] 입장 안내를 그리기 전의 깊이·투명도 설정으로 돌린다.
@@ -921,14 +939,4 @@ void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
     if (cullEnabled) glEnable(GL_CULL_FACE);
     if (!blendEnabled) glDisable(GL_BLEND);
     glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
-}
-
-bool TitleScreen::IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const {
-    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
-    const float px = x * 1200.0f / width;
-    const float py = y * 675.0f / height;
-    const float top = server ? LOGIN_SERVER_Y : LOGIN_NAME_Y;
-    const float inputHeight = server ? LOGIN_SERVER_HEIGHT : LOGIN_NAME_HEIGHT;
-    return px >= LOGIN_INPUT_X && px < LOGIN_INPUT_X + LOGIN_INPUT_WIDTH &&
-        py >= top && py < top + inputHeight;
 }

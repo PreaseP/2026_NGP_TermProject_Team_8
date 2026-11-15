@@ -43,7 +43,11 @@ public:
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
         return &roomPlayers[slot];
     }
-
+    bool IsCharacterConfirmed() const {
+        const RoomPlayerInfo* me = GetRoomPlayer(mySlot);
+        return me != nullptr && me->connected &&
+            (me->character == CHAR_STEVE || me->character == CHAR_ALEX);
+    }
     int GetRoomCount() const { return roomCount; } // [11.10] 저장된 방 개수
     int GetSelectedRoomIndex() const { return selectedRoomIndex; } // [11.11] 현재 선택한 목록 위치
     void MoveRoomSelection(int direction); // [11.11] -1은 위, 1은 아래로 방 선택 이동
