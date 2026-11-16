@@ -351,6 +351,21 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 }
 
 
+void GameClient::ApplyWorldPacket(const unsigned char* packet)
+{
+    if (packet[1] != S2C_MOVE_OBJECT) return;
+    S2C_MoveObject movement{};
+    std::memcpy(&movement, packet, sizeof(movement));
+    if (movement.object_id < 0 || !std::isfinite(movement.x) ||
+        !std::isfinite(movement.y) || !std::isfinite(movement.z)) {
+        HandleDisconnect();
+        return;
+    }
+    const auto found = objects.find(movement.object_id);
+    if (found == objects.end()) return;
+    found->second.renderPos = glm::vec3(movement.x, movement.y, movement.z);
+}
+
 // [11.5]패킷 검사와 종류 구분
 void GameClient::ProcessPacket(const unsigned char* packet)
 {
@@ -422,6 +437,10 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         S2C_GameStartResult result{};
         std::memcpy(&result, packet, sizeof(result));
         HandleGameStartResult(result);
+        return;
+    }
+    if (currentState == CLIENT_PLAYING && packet[1] == S2C_MOVE_OBJECT) {
+        ApplyWorldPacket(packet);
         return;
     }
     // [11.7] 로그인 성공 응답을 받은 뒤에만 로비로 이동한다.

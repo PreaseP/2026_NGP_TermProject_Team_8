@@ -81,6 +81,7 @@ private:
 
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
     void ProcessPacket(const unsigned char* packet);
+    void ApplyWorldPacket(const unsigned char* packet);
 
     CLIENT_STATE currentState = CLIENT_LOGIN;
     int mySessionId = -1; //서버가 구분하기위한 번호
