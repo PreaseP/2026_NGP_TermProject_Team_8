@@ -1,5 +1,6 @@
 #include "NetworkServer.h"
 
+#include <climits>
 #include <cstdio>
 
 namespace {
@@ -46,14 +47,26 @@ bool NetworkServer::Init(unsigned short port, RecvEventQueue* recvQueue, SendReq
 void NetworkServer::RunLoop()
 {
 	while (running.load()) {
+		ProcessSendQueue();
+
+		for (NetSession& session : sessions) {
+			if (session.inUse && session.recvStalled) {
+				const NET_RESULT result = session.ReceivePackets(recvQueue, false);
+				if (result == NET_ERROR || result == NET_CLOSED) {
+					DisconnectClient(&session);
+				}
+			}
+		}
+
 		WSAPOLLFD pollSockets[MAX_CONNECTIONS + 1]{};
 		NetSession* polledSessions[MAX_CONNECTIONS + 1]{};
 		pollSockets[0] = { listenSocket, POLLRDNORM, 0 };
 		ULONG socketCount = 1;
 
 		for (NetSession& session : sessions) {
-			if (session.inUse) {
-				pollSockets[socketCount] = { session.socket, session.GetPollEvents(), 0 };
+			const short events = session.GetPollEvents();
+			if (session.inUse && events != 0) {
+				pollSockets[socketCount] = { session.socket, events, 0 };
 				polledSessions[socketCount] = &session;
 				++socketCount;
 			}
@@ -101,7 +114,7 @@ void NetworkServer::RunLoop()
 					continue;
 				}
 			}
-			else if (events & POLLHUP) {
+			else if ((events & POLLHUP) && !session->recvStalled) {
 				DisconnectClient(session);
 				continue;
 			}
@@ -111,6 +124,43 @@ void NetworkServer::RunLoop()
 				if (result == NET_CLOSED || result == NET_ERROR) {
 					DisconnectClient(session);
 				}
+			}
+		}
+	}
+}
+
+void NetworkServer::ProcessSendQueue()
+{
+	SendRequest request{};
+	for (int i = 0; i < SEND_QUEUE_CAPACITY && running.load(); ++i) {
+		if (!sendQueue->TryDequeue(&request)) {
+			break;
+		}
+
+		NetSession* target = nullptr;
+		for (NetSession& session : sessions) {
+			if (session.inUse && session.sessionId == request.targetSessionId) {
+				target = &session;
+				break;
+			}
+		}
+		if (target == nullptr || target->closeAfterSend) {
+			continue;
+		}
+
+		if (request.packetSize < 0 || request.packetSize > BUF_SIZE) {
+			std::fprintf(stderr, "Invalid send request size for session %d.\n", request.targetSessionId);
+			continue;
+		}
+		if (request.packetSize > 0 && !target->QueueSendData(request.packetData, request.packetSize)) {
+			DisconnectClient(target);
+			continue;
+		}
+
+		if (request.closeAfterSend) {
+			target->closeAfterSend = true;
+			if (target->sendOffset == target->sendSize) {
+				DisconnectClient(target);
 			}
 		}
 	}

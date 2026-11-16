@@ -15,6 +15,7 @@ private:
 
 	void AcceptClients();
 	void DisconnectClient(NetSession* session);
+	void ProcessSendQueue();
 
 public:
 	bool Init(unsigned short port, RecvEventQueue* recvQueue, SendRequestQueue* sendQueue);
