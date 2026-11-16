@@ -805,3 +805,7 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 
 - ProcessPacket에서 경기 중 받은 S2C_MoveObject를 ApplyWorldPacket으로 전달한다. 오브젝트 ID로 기존 objects 항목을 찾아 renderPos를 서버 좌표로 갱신하며, 없는 ID는 생성하지 않는다.
 - 기존 화면 경로에서 내 좌표는 1인칭 카메라에, 상대 좌표는 캐릭터 모델에 반영한다. 잘못된 ID나 NaN/무한대 좌표는 HandleDisconnect로 처리한다. 공격·눈덩이 생성/삭제·보간은 이번 범위에 포함하지 않는다.
+
+## 2026-11-17 후속 — TCP_NODELAY 호출과 검사 분리
+
+- ConnectToServer의 기존 TCP_NODELAY 설정은 유지한다. setsockopt 반환값을 optionResult에 저장하고 바로 다음 if에서 SOCKET_ERROR를 검사한다. 실패 시 오류 출력·Disconnect·false 반환은 유지한다.
