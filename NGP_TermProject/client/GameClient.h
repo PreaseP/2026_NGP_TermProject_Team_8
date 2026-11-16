@@ -71,6 +71,7 @@ public:
     bool QueueRequest(const void* packet, int packetSize);
     void PollNetwork(); // [11.5] 쌓인 데이터를 보내고 도착한 데이터를 받는다.
     CLIENT_STATE GetState() const { return currentState; } // [11.6] 입력 처리기가 현재 상태를 확인한다.
+    void OnKeyUp(unsigned char key) { inputHandler.OnKeyUp(key); }
     void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
 
 private:

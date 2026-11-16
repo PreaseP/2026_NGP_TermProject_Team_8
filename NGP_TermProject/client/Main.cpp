@@ -513,7 +513,10 @@ void initializeGame() {
 
 void Keyboard(unsigned char key, int x, int y)
 {
-	if (gameClient.GetState() == CLIENT_PLAYING) return;
+	if (gameClient.GetState() == CLIENT_PLAYING) {
+		gameClient.OnKeyDown(key);
+		return;
+	}
 	// [11.6]
 	// [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
 	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) { // [11.11] Enter 입력 전달
@@ -596,7 +599,10 @@ void Keyboard(unsigned char key, int x, int y)
 
 void KeyboardUp(unsigned char key, int x, int y)
 {
-	if (gameClient.GetState() == CLIENT_PLAYING) return;
+	if (gameClient.GetState() == CLIENT_PLAYING) {
+		gameClient.OnKeyUp(key);
+		return;
+	}
 	// [11.6]
 	if (gameClient.GetState() == CLIENT_LOGIN) return;
 

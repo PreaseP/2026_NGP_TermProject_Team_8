@@ -128,6 +128,7 @@ void GameClient::HandleDisconnect()
 // [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
 void GameClient::Tick()
 {
+    inputHandler.ProcessInput();
     PollNetwork();
 }
 
@@ -242,6 +243,14 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         return false;
     }
 
+    if (request[1] == C2S_MOVE) {
+        const unsigned char allowedKeys = KEY_FORWARD | KEY_BACK | KEY_LEFT | KEY_RIGHT;
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_Move) ||
+            (request[2] & ~allowedKeys) != 0) {
+            errorMessage = "Invalid movement request.";
+            return false;
+        }
+    }
     request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
     if (!network.QueuePacket(request)) {
         HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.

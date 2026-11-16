@@ -3,10 +3,25 @@
 #include "GameClient.h" // [11.6] 현재 상태 확인과 로그인 요청에 사용한다.
 #include <cstring>
 
+namespace {
+    unsigned char MovementBit(unsigned char key) {
+        switch (key) {
+        case 'w': case 'W': return KEY_FORWARD;
+        case 's': case 'S': return KEY_BACK;
+        case 'a': case 'A': return KEY_LEFT;
+        case 'd': case 'D': return KEY_RIGHT;
+        default: return 0;
+        }
+    }
+}
 // [11.6] 글자는 추가하고, Backspace는 삭제하고, Enter는 로그인 요청을 보낸다.
 void InputHandler::OnKeyDown(unsigned char key)
 {
     if (game == nullptr) return;
+    if (game->GetState() == CLIENT_PLAYING) {
+        moveKeys |= MovementBit(key);
+        return;
+    }
 
     // [11.12] 대기실에서 Esc를 누르면 퇴장 요청을 등록한다.
     if (game->GetState() == CLIENT_ROOM) {
@@ -88,10 +103,20 @@ void InputHandler::OnKeyDown(unsigned char key)
     }
 }
 
+void InputHandler::OnKeyUp(unsigned char key)
+{
+    if (game == nullptr || game->GetState() != CLIENT_PLAYING) return;
+    moveKeys = static_cast<unsigned char>(moveKeys & ~MovementBit(key));
+}
 
-
-
-
+void InputHandler::ProcessInput()
+{
+    if (game == nullptr || game->GetState() != CLIENT_PLAYING || moveKeys == previousKeys) return;
+    C2S_Move request{};
+    request.type = C2S_MOVE;
+    request.move_keys = moveKeys;
+    if (game->QueueRequest(&request, sizeof(request))) previousKeys = moveKeys;
+}
 void InputHandler::SetServerAddress(const char* address)
 {
     std::size_t length = 0;
@@ -105,6 +130,7 @@ void InputHandler::SetServerAddress(const char* address)
 // [11.6] 이전 입력이 다음까지 남지 않게 한다. 닉네임과 요청 대상은 유지한다.
 void InputHandler::Reset()
 {
+    moveKeys = 0;
     previousKeys = 0;
     attackPressed = false;
 }
