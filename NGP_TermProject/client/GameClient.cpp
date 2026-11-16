@@ -214,15 +214,17 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         return false;
     }
 
-    // [11.12] 퇴장은 대기실에서 정해진 크기의 패킷으로만 요청한다.
-    if (request[1] == C2S_LEAVE_ROOM &&
-        (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_LeaveRoom))) {
-        errorMessage = "Invalid leave room request.";
-        return false;
-    }
+    switch (request[1]) {
+    case C2S_LEAVE_ROOM:
+        // [11.12] 퇴장은 대기실에서 정해진 크기의 패킷으로만 요청한다.
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_LeaveRoom)) {
+            errorMessage = "Invalid leave room request.";
+            return false;
+        }
+        break;
 
-    // [11.14] 캐릭터 선택은 대기실에서 정해진 패킷과 캐릭터로만 요청한다.
-    if (request[1] == C2S_SELECT_CHARACTER) {
+    case C2S_SELECT_CHARACTER:
+        // [11.14] 캐릭터 선택은 대기실에서 정해진 패킷과 캐릭터로만 요청한다.
         if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_SelectCharacter)) {
             errorMessage = "Invalid character selection request.";
             return false;
@@ -235,22 +237,29 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
             errorMessage = "Character selection is already confirmed.";
             return false;
         }
-    }
+        break;
 
-    if (request[1] == C2S_GAME_START &&
-        (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_GameStart))) {
-        errorMessage = "Invalid game start request.";
-        return false;
-    }
+    case C2S_GAME_START:
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_GameStart)) {
+            errorMessage = "Invalid game start request.";
+            return false;
+        }
+        break;
 
-    if (request[1] == C2S_MOVE) {
+    case C2S_MOVE: {
         const unsigned char allowedKeys = KEY_FORWARD | KEY_BACK | KEY_LEFT | KEY_RIGHT;
         if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_Move) ||
             (request[2] & ~allowedKeys) != 0) {
             errorMessage = "Invalid movement request.";
             return false;
         }
+        break;
     }
+
+    default:
+        break;
+    }
+
     request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
     if (!network.QueuePacket(request)) {
         HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.

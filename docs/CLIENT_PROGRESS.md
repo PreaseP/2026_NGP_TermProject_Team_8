@@ -809,3 +809,7 @@ N=NetworkClient, G=GameClient, I=InputHandler. 아래 날짜는 계획 기준이
 ## 2026-11-17 후속 — TCP_NODELAY 호출과 검사 분리
 
 - ConnectToServer의 기존 TCP_NODELAY 설정은 유지한다. setsockopt 반환값을 optionResult에 저장하고 바로 다음 if에서 SOCKET_ERROR를 검사한다. 실패 시 오류 출력·Disconnect·false 반환은 유지한다.
+
+## 2026-11-17 후속 — QueueRequest 검사 분기 정리
+
+- 공통 검사는 유지하고 퇴장·캐릭터 선택·게임 시작·이동 요청 검사를 switch(request[1])로 정리한다. 기존 검사 조건·오류 안내·송신 버퍼 등록·퇴장 후 정리는 유지한다. 미커밋 공격 요청 검사는 포함하지 않는다.
