@@ -245,11 +245,15 @@ void GameServer::HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet
         if (room.state != ROOM_WAITING) {
             result.result = JOIN_ROOM_PLAYING;
         }
-        else if (room.GetPlayerCount() >= MAX_ROOM_PLAYERS) {
-            result.result = JOIN_ROOM_FULL;
-        }
         else {
-            slot = room.AddPlayer(session->sessionId);
+            // [11.23] 첫 빈 자리를 찾아 접속 번호를 등록한다.
+            for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
+                if (room.playerSessionIds[i] == INVALID_ID) {
+                    room.playerSessionIds[i] = session->sessionId;
+                    slot = i;
+                    break;
+                }
+            }
             result.result = (slot == INVALID_ID) ? JOIN_ROOM_FULL : JOIN_OK;
         }
     }
@@ -276,7 +280,13 @@ void GameServer::LeaveRoomInternal(GameSession* session)
 
     const int roomId = session->roomId;
     Room& room = rooms[roomId];
-    room.RemovePlayer(session->slot);
+    const int slot = session->slot;
+    // [11.24] 퇴장한 플레이어의 자리와 캐릭터 상태를 비운다.
+    if (slot >= 0 && slot < MAX_ROOM_PLAYERS && room.playerSessionIds[slot] == session->sessionId) {
+        room.playerSessionIds[slot] = INVALID_ID;
+        room.selectedCharacters[slot] = CHAR_NONE;
+        room.players[slot].Reset(CHAR_NONE, glm::vec3(0.0f));
+    }
 
     session->roomId = INVALID_ID;
     session->slot = INVALID_ID;
