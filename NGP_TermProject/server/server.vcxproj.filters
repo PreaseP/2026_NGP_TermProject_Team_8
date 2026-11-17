@@ -65,15 +65,6 @@
     <ClCompile Include="Room.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="Snowball.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="GameSession.cpp">
-      <Filter>GameSession</Filter>
-    </ClCompile>
-    <ClCompile Include="PlayerState.cpp">
-      <Filter>PlayerState</Filter>
-    </ClCompile>
     <ClCompile Include="..\common\Common.cpp">
       <Filter>헤더 파일</Filter>
     </ClCompile>

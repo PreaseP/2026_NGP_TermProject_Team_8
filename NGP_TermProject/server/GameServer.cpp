@@ -37,7 +37,7 @@ bool GameServer::Init(RecvEventQueue* recvQueue, SendRequestQueue* sendQueue, HA
     loggedInCount = 0;
 
     for (GameSession& session : sessions)
-        session.Reset();
+        session = GameSession{};
 
     for (int i = 0; i < MAX_ROOMS; ++i)
         rooms[i].Init(i, this);
@@ -58,7 +58,9 @@ void GameServer::ProcessRecvEvents()
         case RECV_EVENT_CONNECTED:
             for (GameSession& session : sessions) {
                 if (!session.inUse) {
-                    session.Init(event.sessionId);
+                    session = GameSession{};
+                    session.inUse = true;
+                    session.sessionId = event.sessionId;
                     break;
                 }
             }
@@ -74,7 +76,7 @@ void GameServer::ProcessRecvEvents()
             LeaveRoomInternal(session);
             if (session->loggedIn)
                 --loggedInCount;
-            session->Reset();
+            *session = GameSession{};
             break;
         }
         }
@@ -142,7 +144,7 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         if (room.state != ROOM_WAITING)
             break;
 
-        room.SelectCharacter(session->slot, packet.character);
+        room.selectedCharacters[session->slot] = packet.character;
         room.SendRoomInfo();
         break;
     }
@@ -151,7 +153,11 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         if (session->roomId == INVALID_ID)
             break;
 
-        rooms[session->roomId].SetMoveKeys(session->slot, packet.move_keys);
+        Room& room = rooms[session->roomId];
+        if (room.state != ROOM_PLAYING)
+            break;
+
+        room.players[session->slot].moveKeys = packet.move_keys & MOVE_KEY_MASK;
         break;
     }
     case C2S_GAME_START: {
@@ -245,16 +251,25 @@ void GameServer::HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet
         if (room.state != ROOM_WAITING) {
             result.result = JOIN_ROOM_PLAYING;
         }
+        else if (room.GetPlayerCount() >= MAX_ROOM_PLAYERS) {
+            result.result = JOIN_ROOM_FULL;
+        }
         else {
-            // [11.23] 첫 빈 자리를 찾아 접속 번호를 등록한다.
             for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
                 if (room.playerSessionIds[i] == INVALID_ID) {
-                    room.playerSessionIds[i] = session->sessionId;
                     slot = i;
                     break;
                 }
             }
-            result.result = (slot == INVALID_ID) ? JOIN_ROOM_FULL : JOIN_OK;
+
+            if (slot == INVALID_ID) {
+                result.result = JOIN_ROOM_FULL;
+            }
+            else {
+                room.playerSessionIds[slot] = session->sessionId;
+                room.selectedCharacters[slot] = CHAR_NONE;
+                result.result = JOIN_OK;
+            }
         }
     }
 
@@ -280,13 +295,8 @@ void GameServer::LeaveRoomInternal(GameSession* session)
 
     const int roomId = session->roomId;
     Room& room = rooms[roomId];
-    const int slot = session->slot;
-    // [11.24] 퇴장한 플레이어의 자리와 캐릭터 상태를 비운다.
-    if (slot >= 0 && slot < MAX_ROOM_PLAYERS && room.playerSessionIds[slot] == session->sessionId) {
-        room.playerSessionIds[slot] = INVALID_ID;
-        room.selectedCharacters[slot] = CHAR_NONE;
-        room.players[slot].Reset(CHAR_NONE, glm::vec3(0.0f));
-    }
+    room.playerSessionIds[session->slot] = INVALID_ID;
+    room.selectedCharacters[session->slot] = CHAR_NONE;
 
     session->roomId = INVALID_ID;
     session->slot = INVALID_ID;
@@ -297,15 +307,21 @@ void GameServer::LeaveRoomInternal(GameSession* session)
 
 void GameServer::SendPacket(int sessionId, const void* packet, bool closeAfterSend)
 {
-    const PacketHeader* header = static_cast<const PacketHeader*>(packet);
-    if (header->size == 0 || header->size > BUF_SIZE)
-        return;
-
     SendRequest request{};
     request.targetSessionId = sessionId;
-    request.packetSize = header->size;
-    memcpy(request.packetData, packet, header->size);
     request.closeAfterSend = closeAfterSend;
+
+    if (packet != nullptr) {
+        const PacketHeader* header = static_cast<const PacketHeader*>(packet);
+        if (header->size == 0 || header->size > BUF_SIZE)
+            return;
+
+        request.packetSize = header->size;
+        memcpy(request.packetData, packet, header->size);
+    }
+    else if (!closeAfterSend) {
+        return;
+    }
 
     server.sendQueue->Enqueue(request, closeAfterSend);
 }

@@ -17,7 +17,4 @@ public:
     ITEM_TYPE      items[MAX_ITEMS] = {};
     int            itemCount = 0;
     unsigned char  moveKeys = 0;
-
-    void Reset(CHARACTER_TYPE character, const glm::vec3& spawn);
-    void ClearInput();
 };

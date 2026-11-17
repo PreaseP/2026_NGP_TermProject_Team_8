@@ -143,12 +143,9 @@
     <ClCompile Include="GameServer.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="NetSession.cpp" />
-    <ClCompile Include="GameSession.cpp" />
     <ClCompile Include="NetworkServer.cpp" />
-    <ClCompile Include="PlayerState.cpp" />
     <ClCompile Include="Room.cpp" />
     <ClCompile Include="ServerApp.cpp" />
-    <ClCompile Include="Snowball.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
