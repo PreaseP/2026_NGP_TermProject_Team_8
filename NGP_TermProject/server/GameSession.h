@@ -9,7 +9,4 @@ public:
     char name[MAX_NAME_LEN] = {};
     int  roomId = INVALID_ID;
     int  slot = INVALID_ID;
-
-    void Init(int sessionId);
-    void Reset();
 };

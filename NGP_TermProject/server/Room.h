@@ -51,23 +51,14 @@ public:
     GameServer*    server = nullptr;
 
     void Init(int roomId, GameServer* server); // 빈 대기실 초기화
-    int AddPlayer(int sessionId);
-    void RemovePlayer(int slot);
     int GetPlayerCount() const; // 방 인원수 확인
     void SendRoomInfo() const; // 방 정보 전송
-    void SelectCharacter(int slot, CHARACTER_TYPE character);
-    bool CanStart();
     bool StartGame(ULONGLONG now); // 시작 조건 확인 후 경기 시작
     void ResetWorld(); // 눈덩이와 눈 벽 초기화
     void Broadcast(const void* packet) const; // 방 참가자 전원에게 패킷 전송
-    void SendTo(int slot, const void* packet) const;
-    void BuildRoomInfo(S2C_RoomInfo* out) const;
     void SendStatusChange(int objectId, STATUS_TYPE type, float value) const; // 오브젝트 상태 변경 전송
     void SendMoveObject(int objectId, const glm::vec3& pos) const; // 오브젝트 이동 좌표 전송
     static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
-    void SetMoveKeys(int slot, unsigned char keys);
     void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
-    bool MoveCharacter(int slot, float dt);
-    void UpdateArmState(int slot, ULONGLONG now);
 };
