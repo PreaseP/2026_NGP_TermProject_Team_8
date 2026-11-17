@@ -1,4 +1,5 @@
 #include "title.h"
+#include "../common/protocol.h" // [11.10] 방 정보와 상태 종류
 #include <vector>
 #include <iostream>
 
@@ -15,6 +16,39 @@ void TitleScreen::initialize() {
 
     initializeBuffers();
     loadTitleTexture();
+    // [11.10] 로비 배경, 방 버튼, 제목 이미지를 준비한다.
+    loadLobbyTexture("Images/Lobby/Lobby_background.png", lobbyBackgroundTextureId);
+    loadLobbyTexture("Images/Lobby/lobby_roombutton.png", lobbyRoomButtonTextureId);
+    // [11.12] 방향키로 선택한 방은 전용 이미지로 표시한다.
+    loadLobbyTexture("Images/Lobby/lobby_roombutton_selected.png", lobbyRoomSelectedTextureId);
+    loadLobbyTexture("Images/Lobby/lobby_text.png", lobbyTextTextureId);
+    // [11.12] 나가기 버튼의 두 상태를 미리 불러온다.
+    loadLobbyTexture("Images/Room/room_back_to_lobby.png", roomBackTextureId);
+    loadLobbyTexture("Images/Room/room_back_to_lobby_hover.png", roomBackHoverTextureId);
+    // [11.14] 대기실 제목과 화면용 방 번호 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_title.png", roomTitleTextureId);
+    loadLobbyTexture("Images/Room/room_number_1.png", roomNumberTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_number_2.png", roomNumberTextureIds[1]);
+    loadLobbyTexture("Images/Room/room_number_3.png", roomNumberTextureIds[2]);
+    // [11.14] 나와 상대의 카드 프레임·이름표를 준비한다.
+    loadLobbyTexture("Images/Room/room_player_frame.png", roomPlayerFrameTextureId);
+    loadLobbyTexture("Images/Room/room_opponent_frame.png", roomOpponentFrameTextureId);
+    loadLobbyTexture("Images/Room/room_player_label.png", roomPlayerLabelTextureId);
+    loadLobbyTexture("Images/Room/room_opponent_label.png", roomOpponentLabelTextureId);
+    // [11.14] 캐릭터 전신과 미선택 물음표 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_character_steve.png", roomCharacterSteveTextureId);
+    loadLobbyTexture("Images/Room/room_character_alex.png", roomCharacterAlexTextureId);
+    loadLobbyTexture("Images/Room/room_character_unknown.png", roomCharacterUnknownTextureId);
+    // [11.14] 좌우 화살표의 기본·마우스 올림 이미지를 준비한다.
+    loadLobbyTexture("Images/Room/room_character_left.png", roomCharacterArrowTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_character_right.png", roomCharacterArrowTextureIds[1]);
+    loadLobbyTexture("Images/Room/room_character_left_hover.png", roomCharacterArrowHoverTextureIds[0]);
+    loadLobbyTexture("Images/Room/room_character_right_hover.png", roomCharacterArrowHoverTextureIds[1]);
+    // [11.14] 선택 완료 버튼의 두 이미지를 불러온다.
+    loadLobbyTexture("Images/Room/room_character_confirm.png", roomCharacterConfirmTextureId);
+    loadLobbyTexture("Images/Room/room_character_confirm_hover.png", roomCharacterConfirmHoverTextureId);
+    loadLobbyTexture("Images/Room/room_game_start.png", roomGameStartTextureId);
+    loadLobbyTexture("Images/Room/room_game_start_hover.png", roomGameStartHoverTextureId);
     loadStartTexture(); // [11.7] 시작 버튼 텍스처 준비
     loadFontTexture(); // [11.7] 화면 글자 텍스처 준비
     isInitialized = true;
@@ -86,6 +120,27 @@ void TitleScreen::loadTitleTexture() {
     std::cout << "Title.png 텍스처 로드 성공: " << width << "x" << height << " (" << channels << " channels)" << std::endl;
 }
 
+// [11.10] PNG 파일을 읽어 화면에서 사용할 텍스처로 만든다.
+void TitleScreen::loadLobbyTexture(const char* path, GLuint& textureId) {
+    int width = 0, height = 0, channels = 0;
+    stbi_set_flip_vertically_on_load(true);
+    unsigned char* pixels = stbi_load(path, &width, &height, &channels, STBI_rgb_alpha);
+    if (!pixels) {
+        std::cerr << "Failed to load lobby image: " << path << std::endl;
+        return;
+    }
+
+    glGenTextures(1, &textureId);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
+}
+
 void TitleScreen::render(GLuint shaderProgram) const {
     if (!isInitialized) return;
 
@@ -131,7 +186,7 @@ void TitleScreen::render(GLuint shaderProgram) const {
 
     renderText("MINECRAFT SNOWBALL FIGHT", 0.0f, 0.3f, 2.0f);
     renderText("1 - First Person Mode", 0.0f, 0.0f, 1.0f);
-    renderText("3 - Third Person Mode", 0.0f, -0.2f, 1.0f);
+    // renderText("3 - Third Person Mode", 0.0f, -0.2f, 1.0f);
 
     glEnable(GL_DEPTH_TEST);
 }
@@ -149,9 +204,9 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
     case '1':
         std::cout << "1인칭 모드로 게임 시작!" << std::endl;
         return GameState::FIRST_PERSON_MODE;
-    case '3':
-        std::cout << "3인칭 모드로 게임 시작!" << std::endl;
-        return GameState::THIRD_PERSON_MODE;
+    //     case '3':
+    //         std::cout << "3인칭 모드로 게임 시작!" << std::endl;
+    //         return GameState::THIRD_PERSON_MODE;
     default:
         return GameState::TITLE_SCREEN;
     }
@@ -159,6 +214,105 @@ GameState TitleScreen::handleKeyInput(unsigned char key) const {
 }
 
 void TitleScreen::cleanup() {
+    // [11.14] 제목과 방 번호 텍스처를 지우고 번호를 비운다.
+    if (roomTitleTextureId != 0) {
+        glDeleteTextures(1, &roomTitleTextureId);
+        roomTitleTextureId = 0;
+    }
+    for (GLuint& textureId : roomNumberTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    // [11.14] 카드 프레임과 이름표도 함께 정리한다.
+    if (roomPlayerFrameTextureId != 0) {
+        glDeleteTextures(1, &roomPlayerFrameTextureId);
+        roomPlayerFrameTextureId = 0;
+    }
+    if (roomOpponentFrameTextureId != 0) {
+        glDeleteTextures(1, &roomOpponentFrameTextureId);
+        roomOpponentFrameTextureId = 0;
+    }
+    if (roomPlayerLabelTextureId != 0) {
+        glDeleteTextures(1, &roomPlayerLabelTextureId);
+        roomPlayerLabelTextureId = 0;
+    }
+    if (roomOpponentLabelTextureId != 0) {
+        glDeleteTextures(1, &roomOpponentLabelTextureId);
+        roomOpponentLabelTextureId = 0;
+    }
+    // [11.14] 캐릭터 전신과 물음표 이미지도 정리한다.
+    if (roomCharacterSteveTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterSteveTextureId);
+        roomCharacterSteveTextureId = 0;
+    }
+    if (roomCharacterAlexTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterAlexTextureId);
+        roomCharacterAlexTextureId = 0;
+    }
+    if (roomCharacterUnknownTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterUnknownTextureId);
+        roomCharacterUnknownTextureId = 0;
+    }
+    // [11.14] 화살표 이미지와 로컬 미리보기를 정리한다.
+    for (GLuint& textureId : roomCharacterArrowTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    for (GLuint& textureId : roomCharacterArrowHoverTextureIds) {
+        if (textureId != 0) {
+            glDeleteTextures(1, &textureId);
+            textureId = 0;
+        }
+    }
+    ResetCharacterPreview();
+    // [11.14] 선택 완료 버튼도 정리한다.
+    if (roomCharacterConfirmTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterConfirmTextureId);
+        roomCharacterConfirmTextureId = 0;
+    }
+    if (roomCharacterConfirmHoverTextureId != 0) {
+        glDeleteTextures(1, &roomCharacterConfirmHoverTextureId);
+        roomCharacterConfirmHoverTextureId = 0;
+    }
+    if (roomGameStartTextureId != 0) {
+        glDeleteTextures(1, &roomGameStartTextureId);
+        roomGameStartTextureId = 0;
+    }
+    if (roomGameStartHoverTextureId != 0) {
+        glDeleteTextures(1, &roomGameStartHoverTextureId);
+        roomGameStartHoverTextureId = 0;
+    }
+    // [11.12] 나가기 버튼 이미지도 함께 정리한다.
+    if (roomBackTextureId != 0) {
+        glDeleteTextures(1, &roomBackTextureId);
+        roomBackTextureId = 0;
+    }
+    if (roomBackHoverTextureId != 0) {
+        glDeleteTextures(1, &roomBackHoverTextureId);
+        roomBackHoverTextureId = 0;
+    }
+    // [11.10] 로비 텍스처를 지우고 번호를 0으로 비운다.
+    if (lobbyBackgroundTextureId != 0) {
+        glDeleteTextures(1, &lobbyBackgroundTextureId);
+        lobbyBackgroundTextureId = 0;
+    }
+    // [11.12] 선택된 방 버튼 이미지도 함께 정리한다.
+    if (lobbyRoomSelectedTextureId != 0) {
+        glDeleteTextures(1, &lobbyRoomSelectedTextureId);
+        lobbyRoomSelectedTextureId = 0;
+    }
+    if (lobbyRoomButtonTextureId != 0) {
+        glDeleteTextures(1, &lobbyRoomButtonTextureId);
+        lobbyRoomButtonTextureId = 0;
+    }
+    if (lobbyTextTextureId != 0) {
+        glDeleteTextures(1, &lobbyTextTextureId);
+        lobbyTextTextureId = 0;
+    }
     if (fontTextureId != 0) { glDeleteTextures(1, &fontTextureId); fontTextureId = 0; } // [11.7]
     if (startTextureId != 0) { glDeleteTextures(1, &startTextureId); startTextureId = 0; } // [11.7]
     if (isInitialized) {
@@ -258,10 +412,11 @@ void TitleScreen::loadFontTexture() {
 }
 
 void TitleScreen::centeredText(GLuint shader, const std::string& text, float y,
-    float r, float g, float b, float size) const {
+    float r, float g, float b, float size, float centerX) const {
     if (!fontTextureId) return;
     const float scale = size / 24.0f;
-    float x = 600.0f - static_cast<float>(text.size()) * 14.0f * scale / 2;
+    // [11.14] 화면 또는 카드의 가운데를 기준으로 글자를 배치한다.
+    float x = centerX - static_cast<float>(text.size()) * 14.0f * scale / 2;
     for (unsigned char ch : text) {
         if (ch < 32 || ch > 126) ch = '?';
         const int index = ch - 32, column = index % 16, row = index / 16;
@@ -342,7 +497,79 @@ bool TitleScreen::hitsStart(int x, int y, int width, int height) const {
     return std::abs(px - (600.0f + startOffsetX())) <= halfWidth && std::abs(py - 535.0f) <= halfHeight;
 }
 
-void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby) const {
+// [11.12] 창 밖으로 나가면 (-1, -1)을 받아 올림 효과를 끈다.
+void TitleScreen::SetMousePosition(int x, int y) {
+    roomPointerX = x;
+    roomPointerY = y;
+}
+
+// [11.12] 창 크기가 달라도 화면과 같은 1200 x 675 좌표로 검사한다.
+bool TitleScreen::IsMouseOverBackButton(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= ROOM_BACK_X && px < ROOM_BACK_X + ROOM_BACK_SIZE &&
+        py >= ROOM_BACK_Y && py < ROOM_BACK_Y + ROOM_BACK_SIZE;
+}
+
+// [11.14] 그리는 위치와 같은 좌표로 화살표 안인지 검사한다.
+bool TitleScreen::IsMouseOverCharacterArrow(int x, int y, int width, int height, bool left) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    const float arrowX = left ? CHARACTER_ARROW_LEFT_X : CHARACTER_ARROW_RIGHT_X;
+    return px >= arrowX && px < arrowX + CHARACTER_ARROW_SIZE &&
+        py >= CHARACTER_ARROW_Y && py < CHARACTER_ARROW_Y + CHARACTER_ARROW_SIZE;
+}
+
+// [11.14] 현재 표시 중인 캐릭터를 기준으로 Steve·Alex를 번갈아 본다.
+void TitleScreen::ChangeCharacterPreview(int direction, int serverCharacter) {
+    if (direction != -1 && direction != 1) return;
+    if (serverCharacter == CHAR_STEVE || serverCharacter == CHAR_ALEX) return;
+    const int current = GetPreviewCharacter(serverCharacter);
+    previewCharacter = current == CHAR_STEVE ? CHAR_ALEX : CHAR_STEVE;
+}
+
+// [11.14] 대기실을 나가면 이전 미리보기를 비운다.
+void TitleScreen::ResetCharacterPreview() {
+    previewCharacter = -1;
+}
+
+int TitleScreen::GetPreviewCharacter(int serverCharacter) const {
+    if (serverCharacter == CHAR_STEVE || serverCharacter == CHAR_ALEX) return serverCharacter;
+    const int character = previewCharacter >= 0 ? previewCharacter : serverCharacter;
+    return character == CHAR_NONE ? CHAR_STEVE : character;
+}
+
+// [11.14] 화면에 그리는 선택 완료 버튼과 같은 영역을 검사한다.
+bool TitleScreen::IsMouseOverCharacterConfirm(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= CHARACTER_CONFIRM_X && px < CHARACTER_CONFIRM_X + CHARACTER_CONFIRM_WIDTH &&
+        py >= CHARACTER_CONFIRM_Y && py < CHARACTER_CONFIRM_Y + CHARACTER_CONFIRM_HEIGHT;
+}
+
+bool TitleScreen::IsMouseOverGameStartButton(int x, int y, int width, int height) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    return px >= ROOM_GAME_START_X && px < ROOM_GAME_START_X + ROOM_GAME_START_WIDTH &&
+        py >= ROOM_GAME_START_Y && py < ROOM_GAME_START_Y + ROOM_GAME_START_HEIGHT;
+}
+
+bool TitleScreen::IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const {
+    if (x < 0 || y < 0 || width <= 0 || height <= 0) return false;
+    const float px = x * 1200.0f / width;
+    const float py = y * 675.0f / height;
+    const float top = server ? LOGIN_SERVER_Y : LOGIN_NAME_Y;
+    const float inputHeight = server ? LOGIN_SERVER_HEIGHT : LOGIN_NAME_HEIGHT;
+    return px >= LOGIN_INPUT_X && px < LOGIN_INPUT_X + LOGIN_INPUT_WIDTH &&
+        py >= top && py < top + inputHeight;
+}
+
+void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::string& error, bool lobby,
+    const char* serverAddress, bool serverFocused, bool serverSelected) const {
     // [11.7] 배경과 같은 셰이더를 사용하고, 메뉴용 투영·투명도만 설정한다.
     const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
     const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
@@ -369,10 +596,44 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     }
     else {
         // [11.7] 칸에 닉네임과 깜빡이는 커서만 표시한다.
-        panel(shader, 420, 400, 360, 50, 0.035f, 0.075f, 0.11f, 0.9f);
+        const bool blink = (glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0;
+        if (!serverFocused) {
+            panel(shader, LOGIN_INPUT_X - 2, LOGIN_NAME_Y - 2, LOGIN_INPUT_WIDTH + 4,
+                LOGIN_NAME_HEIGHT + 4, 0.15f, 0.7f, 0.85f, 0.9f);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_NAME_Y, LOGIN_INPUT_WIDTH, LOGIN_NAME_HEIGHT,
+            0.035f, 0.075f, 0.11f, 0.9f);
+        panel(shader, LOGIN_INPUT_X, LOGIN_NAME_Y - 24, 125, 20,
+            0.035f, 0.075f, 0.11f, 0.95f);
+        centeredText(shader, "NICKNAME", LOGIN_NAME_Y - 8, 0.7f, 0.92f, 1, 14.0f,
+            LOGIN_INPUT_X + 62.5f);
         std::string display = name;
-        if ((glutGet(GLUT_ELAPSED_TIME) / 500) % 2 == 0) display += "_";
-        centeredText(shader, display, 430, 1, 1, 1);
+        if (display.empty()) {
+            centeredText(shader, "Enter your nickname", LOGIN_NAME_Y + 30,
+                0.58f, 0.69f, 0.75f, 18.0f);
+        }
+        else {
+            if (!serverFocused && blink) display += "_";
+            centeredText(shader, display, LOGIN_NAME_Y + 30, 1, 1, 1);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_SERVER_Y - 24, 125, 20,
+            0.035f, 0.075f, 0.11f, 0.95f);
+        centeredText(shader, "SERVER IP", LOGIN_SERVER_Y - 8, 0.7f, 0.92f, 1, 14.0f,
+            LOGIN_INPUT_X + 62.5f);
+        if (serverFocused) {
+            panel(shader, LOGIN_INPUT_X - 2, LOGIN_SERVER_Y - 2, LOGIN_INPUT_WIDTH + 4,
+                LOGIN_SERVER_HEIGHT + 4, 0.15f, 0.7f, 0.85f, 0.9f);
+        }
+        panel(shader, LOGIN_INPUT_X, LOGIN_SERVER_Y, LOGIN_INPUT_WIDTH, LOGIN_SERVER_HEIGHT,
+            0.035f, 0.075f, 0.11f, 0.9f);
+        std::string address = serverAddress;
+        if (serverFocused && serverSelected && !address.empty()) {
+            const float textWidth = static_cast<float>(address.size()) * 10.5f;
+            panel(shader, 600 - textWidth / 2 - 4, LOGIN_SERVER_Y + 7,
+                textWidth + 8, 30, 0.15f, 0.4f, 0.6f, 0.9f);
+        }
+        if (serverFocused && !serverSelected && blink) address += "_";
+        centeredText(shader, address, LOGIN_SERVER_Y + 28, 1, 1, 1);
         const float halfWidth = 280.0f * startScale(), halfHeight = halfWidth / startAspect;
         // [11.7] 기존 uiColor로 붉은 기운을 주고 서서히 원래 색으로 돌린다.
         const float tint = 0.65f * startErrorStrength();
@@ -389,6 +650,291 @@ void TitleScreen::renderLoginUI(GLuint shader, const char* name, const std::stri
     // [11.7] 다음 배경·게임 출력에는 기존 셰이더 동작을 사용한다.
     glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
     glBindVertexArray(0); glBindTexture(GL_TEXTURE_2D, 0);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+}
+
+// [11.10] 기존 셰이더와 사각형 그리기로 로비 이미지를 배치한다.
+void TitleScreen::renderLobby(GLuint shader, const RoomSummary* rooms, int roomCount,
+    int selectedRoomIndex, const std::string& error) const {
+    if (!isInitialized) return;
+
+    // [11.10] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
+    const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glUseProgram(shader);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glActiveTexture(GL_TEXTURE0);
+    glm::mat4 view(1.0f);
+    glm::mat4 projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
+
+    // [11.10] 배경 위에 제목과 세 칸의 방 버튼 이미지를 그린다.
+    const glm::vec4 white(1.0f);
+    if (lobbyBackgroundTextureId != 0) {
+        drawUIQuad(shader, 0, 0, 1200, 675, lobbyBackgroundTextureId, white);
+    }
+    else {
+        panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
+    }
+    if (lobbyTextTextureId != 0) {
+        drawUIQuad(shader, 330, 30.08f, 540, 181.44f, lobbyTextTextureId, white);
+    }
+    else {
+        centeredText(shader, "LOBBY", 145, 1, 1, 1, 28.8f);
+    }
+    // [11.10] 세 방 버튼의 중심 위치를 유지하며 원래 크기의 약 73.1%로 그린다.
+    // [11.10] 목록이 비어 있으면 현재 표시할 방이 없음을 알려 준다.
+    if (rooms == nullptr || roomCount <= 0) {
+        centeredText(shader, "No rooms available", 360, 1, 1, 1, 22.0f);
+    }
+    for (int i = 0; rooms != nullptr && i < roomCount && i < MAX_ROOMS; ++i) {
+        const float y = 170.0f + i * 145.0f;
+        // [11.11] 선택한 방만 중심을 유지하며 5% 크게 그린다.
+        const bool selected = i == selectedRoomIndex;
+        float scale = 1.0f;
+        if (selected) scale = 1.05f;
+        const float buttonWidth = 548.27f * scale;
+        const float buttonHeight = 182.76f * scale;
+        const float frameWidth = 504.41f * scale;
+        const float frameHeight = 95.03f * scale;
+        const float frameX = 600.0f - frameWidth / 2;
+        const float frameY = y + 120.0f - frameHeight / 2;
+        // [11.12] 확대 크기는 유지하고 선택 여부에 따라 이미지만 바꾼다.
+        const GLuint buttonTexture = selected && lobbyRoomSelectedTextureId != 0
+            ? lobbyRoomSelectedTextureId : lobbyRoomButtonTextureId;
+        if (buttonTexture != 0) {
+            drawUIQuad(shader, 600.0f - buttonWidth / 2, y + 125.0f - buttonHeight / 2,
+                buttonWidth, buttonHeight, buttonTexture, white);
+        }
+        else {
+            panel(shader, frameX, frameY, frameWidth, frameHeight, 0.1f, 0.15f, 0.2f, 0.9f);
+        }
+
+        // [11.10] 서버에서 받은 방 번호, 인원, 상태를 버튼 중앙에 표시한다.
+        const RoomSummary& room = rooms[i];
+        const char* stateText = "Unknown";
+        switch (room.state) {
+        case ROOM_WAITING: stateText = "Waiting"; break;
+        case ROOM_PLAYING: stateText = "Playing"; break;
+        case ROOM_RESULT: stateText = "Result"; break;
+        }
+        const std::string roomText = "Room " + std::to_string(room.room_id) + "    " +
+            std::to_string(room.player_count) + "/" + std::to_string(MAX_ROOM_PLAYERS) + "    " + stateText;
+        centeredText(shader, roomText, y + 132.0f, 1, 1, 1, 22.0f);
+    }
+
+    // [11.11] 정상적인 입장 거절은 로비 아래쪽에 이유를 표시한다.
+    if (!error.empty()) {
+        centeredText(shader, error, 654, 1, 0.6f, 0.55f, 18.0f);
+    }
+
+    // [11.10] 로비를 그리기 전의 깊이·투명도 설정으로 돌린다.
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (depthEnabled) glEnable(GL_DEPTH_TEST);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glBlendFuncSeparate(srcRGB, dstRGB, srcAlpha, dstAlpha);
+}
+
+// [11.11] 서버가 확인한 방 번호와 자리 번호를 간단히 표시한다.
+void TitleScreen::renderRoomEntry(GLuint shader, int roomId, int slot,
+    const RoomPlayerInfo* players) const {
+    if (!isInitialized) return;
+
+    // [11.11] 화면 좌표와 PNG 투명도를 사용할 준비를 한다.
+    const GLboolean depthEnabled = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLint srcRGB, dstRGB, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRGB);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRGB);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glUseProgram(shader);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glActiveTexture(GL_TEXTURE0);
+    glm::mat4 view(1.0f);
+    glm::mat4 projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shader, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniform1i(glGetUniformLocation(shader, "texture1"), 0);
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 1);
+
+    if (lobbyBackgroundTextureId != 0) {
+        drawUIQuad(shader, 0, 0, 1200, 675, lobbyBackgroundTextureId, glm::vec4(1.0f));
+    }
+    else {
+        panel(shader, 0, 0, 1200, 675, 0.1f, 0.2f, 0.35f, 1.0f);
+    }
+    // [11.12] 마우스가 올라가면 눌린 느낌의 이미지로 바꾼다.
+    const bool backHovered = IsMouseOverBackButton(roomPointerX, roomPointerY,
+        glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+    const GLuint backTexture = backHovered && roomBackHoverTextureId != 0
+        ? roomBackHoverTextureId : roomBackTextureId;
+    if (backTexture != 0) {
+        drawUIQuad(shader, ROOM_BACK_X, ROOM_BACK_Y, ROOM_BACK_SIZE, ROOM_BACK_SIZE,
+            backTexture, glm::vec4(1.0f));
+    }
+    // [11.12] 현재 방과 두 자리의 참가자 정보를 표시한다.
+    // [11.14] 제목과 방 번호만 위쪽에 표시하고 참가자 정보는 유지한다.
+    if (roomTitleTextureId != 0) {
+        drawUIQuad(shader, 480, -6, 240, 96, roomTitleTextureId, glm::vec4(1.0f));
+    }
+    else {
+        centeredText(shader, "WAITING ROOM", 68, 1, 1, 1, 28.0f);
+    }
+    // [11.14] 서버 방 번호 0~2로 ROOM 1~3 이미지를 고른다.
+    if (roomId >= 0 && roomId < MAX_ROOMS) {
+        const GLuint numberTexture = roomNumberTextureIds[roomId];
+        if (numberTexture != 0) {
+            drawUIQuad(shader, 490, 70, 220, 220.0f / 3.0f, numberTexture, glm::vec4(1.0f));
+        }
+        else {
+            centeredText(shader, "ROOM " + std::to_string(roomId + 1), 114, 0.75f, 0.88f, 1, 20.0f);
+        }
+    }
+    // [11.14] 내 자리 번호와 관계없이 나는 왼쪽, 상대는 오른쪽에 표시한다.
+    for (int cardIndex = 0; cardIndex < MAX_ROOM_PLAYERS; ++cardIndex) {
+        const bool myCard = cardIndex == 0;
+        const int playerSlot = myCard ? slot : 1 - slot;
+        const float centerX = myCard ? 420.0f : 780.0f;
+        const GLuint frameTexture = myCard ? roomPlayerFrameTextureId : roomOpponentFrameTextureId;
+        const GLuint labelTexture = myCard ? roomPlayerLabelTextureId : roomOpponentLabelTextureId;
+        if (frameTexture != 0) {
+            drawUIQuad(shader, centerX - 190, 145, 380, 350, frameTexture, glm::vec4(1.0f));
+        }
+        else {
+            panel(shader, centerX - 165, 165, 330, 305, 0.1f, myCard ? 0.23f : 0.15f,
+                myCard ? 0.33f : 0.2f, 0.95f);
+        }
+        if (labelTexture != 0) {
+            drawUIQuad(shader, centerX - 80, 165, 160, 160.0f * 763.0f / 2060.0f,
+                labelTexture, glm::vec4(1.0f));
+        }
+        else {
+            centeredText(shader, myCard ? "You" : "Opponent", 210, 0.75f, 0.88f, 1, 22.0f, centerX);
+        }
+        // [11.14] 빈 자리에는 대기 문구를 표시하고 참가자 배열은 읽기만 한다.
+        if (players == nullptr || slot < 0 || slot >= MAX_ROOM_PLAYERS ||
+            !players[playerSlot].connected) {
+            centeredText(shader, "Waiting for player...", 340, 0.7f, 0.75f, 0.8f, 18.0f, centerX);
+            continue;
+        }
+        const RoomPlayerInfo& player = players[playerSlot];
+        const bool characterConfirmed = myCard &&
+            (player.character == CHAR_STEVE || player.character == CHAR_ALEX);
+        // [11.14] 서버에서 받은 캐릭터 값으로 전신 또는 물음표를 고른다.
+        GLuint characterTexture = roomCharacterUnknownTextureId;
+        const char* characterText = "Selecting...";
+        // [11.14] 내 카드만 로컬 미리보기를 우선하고 상대는 서버 값을 사용한다.
+        // [11.14] 나는 미선택이어도 Steve부터 보고, 상대의 미선택은 물음표로 둔다.
+        const int displayCharacter = myCard ? GetPreviewCharacter(player.character) : player.character;
+        switch (displayCharacter) {
+        case CHAR_STEVE:
+            characterTexture = roomCharacterSteveTextureId;
+            characterText = "Steve";
+            break;
+        case CHAR_ALEX:
+            characterTexture = roomCharacterAlexTextureId;
+            characterText = "Alex";
+            break;
+        }
+        centeredText(shader, player.name, 240, 1, 1, 1, 22.0f, centerX);
+        // [11.14] 원본 비율을 유지하고 카드의 캐릭터 영역 가운데에 그린다.
+        const bool characterSelected = displayCharacter == CHAR_STEVE || displayCharacter == CHAR_ALEX;
+        const float characterHeight = characterSelected ? 185.0f : 150.0f;
+        const float characterWidth = characterHeight * (characterSelected
+            ? 1393.0f / 1129.0f : 1199.0f / 1312.0f);
+        const float characterY = 250.0f + (185.0f - characterHeight) / 2.0f;
+        if (characterTexture != 0) {
+            drawUIQuad(shader, centerX - characterWidth / 2.0f, characterY,
+                characterWidth, characterHeight, characterTexture, glm::vec4(1.0f));
+        }
+        // [11.14] 화살표는 내 카드에만 표시한다.
+        if (myCard && !characterConfirmed) {
+            for (int arrowIndex = 0; arrowIndex < 2; ++arrowIndex) {
+                const bool left = arrowIndex == 0;
+                const float arrowX = left ? CHARACTER_ARROW_LEFT_X : CHARACTER_ARROW_RIGHT_X;
+                const bool hovered = IsMouseOverCharacterArrow(roomPointerX, roomPointerY,
+                    glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT), left);
+                const GLuint arrowTexture = hovered && roomCharacterArrowHoverTextureIds[arrowIndex] != 0
+                    ? roomCharacterArrowHoverTextureIds[arrowIndex] : roomCharacterArrowTextureIds[arrowIndex];
+                if (arrowTexture != 0) {
+                    drawUIQuad(shader, arrowX, CHARACTER_ARROW_Y, CHARACTER_ARROW_SIZE, CHARACTER_ARROW_SIZE,
+                        arrowTexture, glm::vec4(1.0f));
+                }
+                else {
+                    panel(shader, arrowX, CHARACTER_ARROW_Y, CHARACTER_ARROW_SIZE, CHARACTER_ARROW_SIZE,
+                        0.2f, 0.25f, 0.3f, 1.0f);
+                    centeredText(shader, left ? "<" : ">", CHARACTER_ARROW_Y + 40,
+                        1, 1, 1, 24.0f, arrowX + CHARACTER_ARROW_SIZE / 2);
+                }
+            }
+        }
+        // [11.14] 내 참가자 정보가 있을 때 선택 완료 버튼을 표시한다.
+        if (myCard && !characterConfirmed) {
+            const bool hovered = !characterConfirmed && IsMouseOverCharacterConfirm(roomPointerX, roomPointerY,
+                glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+            const GLuint confirmTexture = hovered && roomCharacterConfirmHoverTextureId != 0
+                ? roomCharacterConfirmHoverTextureId : roomCharacterConfirmTextureId;
+            if (confirmTexture != 0) {
+                drawUIQuad(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
+                    CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, confirmTexture, glm::vec4(1.0f));
+            }
+            else {
+                panel(shader, CHARACTER_CONFIRM_X, CHARACTER_CONFIRM_Y,
+                    CHARACTER_CONFIRM_WIDTH, CHARACTER_CONFIRM_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
+                centeredText(shader, "Select", CHARACTER_CONFIRM_Y + 40, 1, 1, 1, 20.0f, 420.0f);
+            }
+        }
+        if (myCard) {
+            const bool hovered = IsMouseOverGameStartButton(roomPointerX, roomPointerY,
+                glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+            const GLuint startTexture = hovered && roomGameStartHoverTextureId != 0
+                ? roomGameStartHoverTextureId : roomGameStartTextureId;
+            if (startTexture != 0) {
+                drawUIQuad(shader, ROOM_GAME_START_X, ROOM_GAME_START_Y,
+                    ROOM_GAME_START_WIDTH, ROOM_GAME_START_HEIGHT, startTexture, glm::vec4(1.0f));
+            }
+            else {
+                panel(shader, ROOM_GAME_START_X, ROOM_GAME_START_Y,
+                    ROOM_GAME_START_WIDTH, ROOM_GAME_START_HEIGHT, 0.15f, 0.25f, 0.3f, 1.0f);
+                centeredText(shader, "Game Start", ROOM_GAME_START_Y + 40, 1, 1, 1, 20.0f);
+            }
+        }
+        // [11.14] 내 카드도 접두어 없이 캐릭터 이름만 표시한다.
+        centeredText(shader, characterText, 448, 0.85f, 0.9f, 0.95f, 18.0f, centerX);
+        if (myCard && !characterConfirmed && characterSelected) {
+            const char* characterInfo = displayCharacter == CHAR_STEVE
+                ? "POWER +   SPEED -" : "SPEED +   POWER -";
+            centeredText(shader, characterInfo, 465, 0.7f, 0.88f, 1.0f, 12.0f, centerX);
+        }
+    }
+
+    // [11.11] 입장 안내를 그리기 전의 깊이·투명도 설정으로 돌린다.
+    glUniform1i(glGetUniformLocation(shader, "uiMode"), 0);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
     if (depthEnabled) glEnable(GL_DEPTH_TEST);
     if (cullEnabled) glEnable(GL_CULL_FACE);
     if (!blendEnabled) glDisable(GL_BLEND);

@@ -57,8 +57,9 @@ bool NetworkClient::ConnectToServer(const char* ip, unsigned short port)
     // 작은 게임 요청을 모아 두느라 지연하지 않도록 Nagle 알고리즘을 끈다.
     // 공용 NetUtil은 아직 없으므로 이번 단계에서는 해당 Windows API를 직접 호출한다.
     const BOOL noDelay = TRUE;
-    if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
-        reinterpret_cast<const char*>(&noDelay), sizeof(noDelay)) == SOCKET_ERROR) {
+    const int optionResult = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+        reinterpret_cast<const char*>(&noDelay), sizeof(noDelay));
+    if (optionResult == SOCKET_ERROR) {
         std::cerr << "TCP_NODELAY failed: " << WSAGetLastError() << std::endl;
         Disconnect();
         return false;

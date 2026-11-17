@@ -3,10 +3,13 @@
 #include <gl/glm/glm.hpp>
 #include <string>
 
+struct RoomSummary; // [11.10] 화면에서 읽을 방 요약 정보
+struct RoomPlayerInfo; // [11.12] 화면에서 읽을 참가자 정보
+
 enum class GameState {
     TITLE_SCREEN,
     FIRST_PERSON_MODE,
-    THIRD_PERSON_MODE,
+    // THIRD_PERSON_MODE,
     FINISH_SCREEN
 };
 
@@ -17,11 +20,28 @@ public:
 
     void initialize();
     void render(GLuint shaderProgram) const;
+    void renderLobby(GLuint shaderProgram, const RoomSummary* rooms, int roomCount,
+        int selectedRoomIndex, const std::string& error) const; // [11.10] 로비 이미지와 방 정보를 그린다. [11.11] 선택 위치와 오류 안내도 받는다.
+    void renderRoomEntry(GLuint shaderProgram, int roomId, int slot,
+        const RoomPlayerInfo* players) const; // [11.11] 입장 성공과 지정된 방·자리를 표시한다. [11.12] 참가자 정보도 표시한다.
     GameState handleKeyInput(unsigned char key) const;
     void cleanup();
     // [11.7] 로그인 입력·버튼과 로그인 성공 후 로비 안내를 그린다.
-    void renderLoginUI(GLuint shaderProgram, const char* name, const std::string& error, bool lobby) const;
+    void renderLoginUI(GLuint shaderProgram, const char* name, const std::string& error, bool lobby,
+        const char* serverAddress, bool serverFocused, bool serverSelected) const;
+    bool IsMouseOverLoginInput(int x, int y, int width, int height, bool server) const;
     bool hitsStart(int x, int y, int width, int height) const;
+    // [11.12] 마우스 위치를 기억하고 나가기 버튼 안인지 확인한다.
+    void SetMousePosition(int x, int y);
+    bool IsMouseOverBackButton(int x, int y, int width, int height) const;
+    // [11.14] 화살표는 내 화면의 캐릭터 미리보기만 바꾼다.
+    bool IsMouseOverCharacterArrow(int x, int y, int width, int height, bool left) const;
+    void ChangeCharacterPreview(int direction, int serverCharacter);
+    void ResetCharacterPreview();
+    // [11.14] 표시 중인 캐릭터를 선택 완료 요청에도 사용한다.
+    int GetPreviewCharacter(int serverCharacter) const;
+    bool IsMouseOverCharacterConfirm(int x, int y, int width, int height) const;
+    bool IsMouseOverGameStartButton(int x, int y, int width, int height) const;
     void PlayNameError(); // [11.7] 버튼을 잠깐 붉게 만들고 좌우로 흔든다.
 
 private:
@@ -29,11 +49,14 @@ private:
     void renderText(const std::string& text, float x, float y, float scale) const;
     void loadTitleTexture();
     void loadStartTexture(); // [11.7] 투명 PNG 버튼을 불러온다.
+    void loadLobbyTexture(const char* path, GLuint& textureId); // [11.10] 로비 PNG를 텍스처로 준비한다.
     void loadFontTexture(); // [11.7] 글자도 같은 셰이더로 그리도록 텍스처로 준비한다.
     void drawUIQuad(GLuint shader, float x, float y, float w, float h,
         GLuint texture, const glm::vec4& color, const glm::vec4& uv = glm::vec4(0, 0, 1, 1)) const;
     void panel(GLuint shader, float x, float y, float w, float h, float r, float g, float b, float a) const;
-    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b, float size = 18.0f) const;
+    // [11.14] centerX를 생략하면 기존처럼 화면 중앙에 표시한다.
+    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b,
+        float size = 18.0f, float centerX = 600.0f) const;
     GLuint fontTextureId = 0;
     float startScale() const; // [11.7] 표시와 클릭 검사에 같은 크기를 사용한다.
     float startErrorStrength() const; // [11.7] 남은 오류 효과의 세기: 1에서 0으로 줄어든다.
@@ -50,5 +73,56 @@ private:
     bool isInitialized;
 
     GLuint titleTextureId = 0;
+    GLuint lobbyBackgroundTextureId = 0; // [11.10] 로비 배경
+    GLuint lobbyRoomButtonTextureId = 0; // [11.10] 방 버튼
+    GLuint lobbyRoomSelectedTextureId = 0; // [11.12] 선택된 방 버튼 이미지
+    GLuint lobbyTextTextureId = 0; // [11.10] 로비 제목
+    // [11.12] 대기실 나가기 버튼의 기본/마우스 올림 이미지
+    GLuint roomBackTextureId = 0;
+    GLuint roomBackHoverTextureId = 0;
+    // [11.14] 제목 1개와 ROOM 1~3 이미지의 텍스처 번호
+    GLuint roomTitleTextureId = 0;
+    GLuint roomNumberTextureIds[3] = {};
+    // [11.14] 나·상대 카드 프레임과 이름표
+    GLuint roomPlayerFrameTextureId = 0;
+    GLuint roomOpponentFrameTextureId = 0;
+    GLuint roomPlayerLabelTextureId = 0;
+    GLuint roomOpponentLabelTextureId = 0;
+    // [11.14] 서버 캐릭터 값에 따라 표시할 이미지
+    GLuint roomCharacterSteveTextureId = 0;
+    GLuint roomCharacterAlexTextureId = 0;
+    GLuint roomCharacterUnknownTextureId = 0;
+    // [11.14] 화살표 배열은 왼쪽 0, 오른쪽 1이다.
+    GLuint roomCharacterArrowTextureIds[2] = {};
+    GLuint roomCharacterArrowHoverTextureIds[2] = {};
+    // [11.14] 선택 완료 버튼의 기본·마우스 올림 이미지
+    GLuint roomCharacterConfirmTextureId = 0;
+    GLuint roomCharacterConfirmHoverTextureId = 0;
+    const float CHARACTER_CONFIRM_X = 320.0f;
+    const float CHARACTER_CONFIRM_Y = 470.0f;
+    const float CHARACTER_CONFIRM_WIDTH = 200.0f;
+    const float CHARACTER_CONFIRM_HEIGHT = 200.0f / 3.0f;
+    GLuint roomGameStartTextureId = 0;
+    GLuint roomGameStartHoverTextureId = 0;
+    const float ROOM_GAME_START_X = 400.5f;
+    const float ROOM_GAME_START_Y = 540.0f;
+    const float ROOM_GAME_START_WIDTH = 399.0f;
+    const float ROOM_GAME_START_HEIGHT = 399.0f / 3.0f;
+    int previewCharacter = -1; // -1이면 서버 값을 보되, 내 미선택은 Steve로 표시한다.
+    const float CHARACTER_ARROW_LEFT_X = 265.0f;
+    const float CHARACTER_ARROW_RIGHT_X = 515.0f;
+    const float CHARACTER_ARROW_Y = 340.0f;
+    const float CHARACTER_ARROW_SIZE = 60.0f;
+    int roomPointerX = -1;
+    int roomPointerY = -1;
+    const float ROOM_BACK_X = 40.0f;
+    const float ROOM_BACK_Y = 40.0f;
+    const float ROOM_BACK_SIZE = 80.0f;
+    const float LOGIN_INPUT_X = 420.0f;
+    const float LOGIN_INPUT_WIDTH = 360.0f;
+    const float LOGIN_NAME_Y = 350.0f;
+    const float LOGIN_NAME_HEIGHT = 50.0f;
+    const float LOGIN_SERVER_Y = 430.0f;
+    const float LOGIN_SERVER_HEIGHT = 45.0f;
     bool textureLoaded = false;
 };

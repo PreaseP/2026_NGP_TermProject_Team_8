@@ -1,6 +1,7 @@
 ﻿#include "GameClient.h"
 
 #include <cstddef>
+#include <cmath>
 #include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
 
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
@@ -25,10 +26,23 @@ bool GameClient::Init(const char* ip)
         return false;
     }
 
+    inputHandler.SetServerAddress(serverIp.c_str());
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    ClearWorld();
+    // [11.12] 시작할 때 참가자와 캐릭터 선택을 비운다.
+    for (RoomPlayerInfo& player : roomPlayers) {
+        player = {};
+        player.character = CHAR_NONE;
+    }
+    // [11.10] 시작할 때 방 목록을 비움
+    for (RoomSummary& room : rooms) {
+        room = {};
+    }
+    roomCount = 0;
+    selectedRoomIndex = 0; // [11.11] 첫 번째 방부터 선택한다.
     inputHandler.Reset(); // [11.6] 시작할 때 이전 이동·공격 입력 기록을 비운다.
     nameErrorEffect = false; // [11.7] 이전 닉네임 오류 효과를 비운다.
     errorMessage.clear(); // 초기화에 성공했으므로 이전 오류 메시지를 지운다.
@@ -39,6 +53,27 @@ bool GameClient::Init(const char* ip)
 void GameClient::Shutdown()
 {
     network.Shutdown();
+}
+
+bool GameClient::SetServerAddress(const char* address)
+{
+    if (currentState != CLIENT_LOGIN) {
+        errorMessage = "Server address can only be changed before login.";
+        return false;
+    }
+    in_addr parsed{};
+    if (address == nullptr || inet_pton(AF_INET, address, &parsed) != 1) {
+        nameErrorEffect = false;
+        errorMessage = "Enter a valid server IPv4 address.";
+        return false;
+    }
+    if (serverIp != address) {
+        network.Disconnect();
+        serverIp = address;
+    }
+    inputHandler.SetServerAddress(serverIp.c_str());
+    errorMessage.clear();
+    return true;
 }
 
 // [11.4] 서버 IP로 실제 접속을 시도하는 함수
@@ -68,11 +103,24 @@ bool GameClient::TryConnect()
 void GameClient::HandleDisconnect()
 {
     network.Disconnect(); // [11.9] 소켓과 송수신 버퍼를 비운다.
+    ClearWorld();
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
     mySlot = -1;
+    // [11.12] 연결이 끊기면 이전 방의 참가자 정보를 비운다.
+    for (RoomPlayerInfo& player : roomPlayers) {
+        player = {};
+        player.character = CHAR_NONE;
+    }
+    // [11.10] 연결이 끊기면 이전 서버의 방 목록을 비운다.
+    for (RoomSummary& room : rooms) {
+        room = {};
+    }
+    roomCount = 0;
+    selectedRoomIndex = 0; // [11.11] 이전 방 선택도 비운다.
     inputHandler = InputHandler{this}; // [11.9] 닉네임과 이동·공격 입력을 모두 비운다.
+    inputHandler.SetServerAddress(serverIp.c_str());
     nameErrorEffect = false;
     errorMessage = "Connection lost. Enter your nickname and press GAME START.";
 }
@@ -80,6 +128,7 @@ void GameClient::HandleDisconnect()
 // [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
 void GameClient::Tick()
 {
+    inputHandler.ProcessInput();
     PollNetwork();
 }
 
@@ -133,6 +182,105 @@ bool GameClient::RequestLogin(const char* name)
     return true;
 }
 
+// [11.11] 방향키로 선택 위치만 바꾼다. 끝에 도달하면 현재 선택을 유지한다.
+void GameClient::MoveRoomSelection(int direction)
+{
+    if (currentState != CLIENT_LOBBY) return;
+    if (direction != -1 && direction != 1) return;
+
+    const int nextIndex = selectedRoomIndex + direction;
+    if (nextIndex >= 0 && nextIndex < roomCount) {
+        selectedRoomIndex = nextIndex;
+    }
+}
+
+// [11.11] 호출자는 요청 종류(type)와 내용을 채운다. 실제 송신은 PollNetwork에서 한다.
+bool GameClient::QueueRequest(const void* packet, int packetSize)
+{
+    if (currentState == CLIENT_LOGIN) {
+        errorMessage = "Log in before sending requests.";
+        return false;
+    }
+    // [11.11] size와 type으로 최소 2바이트가 필요하고, size는 최대 255다.
+    if (packet == nullptr || packetSize < 2 || packetSize > 255) {
+        errorMessage = "Invalid request size.";
+        return false;
+    }
+
+    unsigned char request[BUF_SIZE]{};
+    std::memcpy(request, packet, packetSize);
+    if (request[1] < C2S_JOIN_ROOM || request[1] > C2S_USE_ITEM) {
+        errorMessage = "Invalid request type.";
+        return false;
+    }
+
+    switch (request[1]) {
+    case C2S_LEAVE_ROOM:
+        // [11.12] 퇴장은 대기실에서 정해진 크기의 패킷으로만 요청한다.
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_LeaveRoom)) {
+            errorMessage = "Invalid leave room request.";
+            return false;
+        }
+        break;
+
+    case C2S_SELECT_CHARACTER:
+        // [11.14] 캐릭터 선택은 대기실에서 정해진 패킷과 캐릭터로만 요청한다.
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_SelectCharacter)) {
+            errorMessage = "Invalid character selection request.";
+            return false;
+        }
+        if (request[2] != CHAR_STEVE && request[2] != CHAR_ALEX) {
+            errorMessage = "Invalid character selection.";
+            return false;
+        }
+        if (IsCharacterConfirmed()) {
+            errorMessage = "Character selection is already confirmed.";
+            return false;
+        }
+        break;
+
+    case C2S_GAME_START:
+        if (currentState != CLIENT_ROOM || packetSize != sizeof(C2S_GameStart)) {
+            errorMessage = "Invalid game start request.";
+            return false;
+        }
+        break;
+
+    case C2S_MOVE: {
+        const unsigned char allowedKeys = KEY_FORWARD | KEY_BACK | KEY_LEFT | KEY_RIGHT;
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_Move) ||
+            (request[2] & ~allowedKeys) != 0) {
+            errorMessage = "Invalid movement request.";
+            return false;
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    request[0] = static_cast<unsigned char>(packetSize); // [11.11] 첫 바이트에 전체 크기를 넣는다.
+    if (!network.QueuePacket(request)) {
+        HandleDisconnect(); // [11.11] 연결이 없으면 기존 로그인 복귀 처리를 사용한다.
+        return false;
+    }
+    // [11.12] 퇴장 응답 패킷이 없으므로 등록 성공 후 로비로 돌아간다.
+    if (request[1] == C2S_LEAVE_ROOM) {
+        ClearWorld();
+        myRoomId = -1;
+        mySlot = -1;
+        for (RoomPlayerInfo& player : roomPlayers) {
+            player = {};
+            player.character = CHAR_NONE;
+        }
+        inputHandler.Reset(); // 닉네임은 유지하고 이전 이동·공격 입력만 비운다.
+        currentState = CLIENT_LOBBY;
+    }
+    errorMessage.clear();
+    return true; // [11.11] 송신 버퍼에 등록한 상태다.
+}
+
 // [11.5]
 void GameClient::PollNetwork()
 {
@@ -167,6 +315,64 @@ void GameClient::PollNetwork()
         HandleDisconnect(); // [11.9] 오류( 서버가 연결을 닫았거나 수신 오류 발생 )
         return;
     }
+}
+
+void GameClient::ClearWorld()
+{
+    objects.clear();
+    for (int& playerHp : hp) {
+        playerHp = 0;
+    }
+    gameStartResult = {};
+    for (CHARACTER_TYPE& character : gameStartResult.character) {
+        character = CHAR_NONE;
+    }
+}
+
+void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
+{
+    if (!result.success) {
+        errorMessage = "Game could not start. Check players and character selections.";
+        return;
+    }
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        if ((result.character[slot] != CHAR_STEVE && result.character[slot] != CHAR_ALEX) ||
+            !std::isfinite(result.x[slot]) || !std::isfinite(result.y[slot]) ||
+            !std::isfinite(result.z[slot])) {
+            HandleDisconnect();
+            return;
+        }
+    }
+    ClearWorld();
+    gameStartResult = result;
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        ClientObject player{};
+        player.objectId = slot;
+        player.type = OBJ_CHARACTER;
+        player.character = result.character[slot];
+        player.renderPos = glm::vec3(result.x[slot], result.y[slot], result.z[slot]);
+        objects[slot] = player;
+        hp[slot] = MAX_HP;
+    }
+    inputHandler.Reset();
+    errorMessage.clear();
+    currentState = CLIENT_PLAYING;
+}
+
+
+void GameClient::ApplyWorldPacket(const unsigned char* packet)
+{
+    if (packet[1] != S2C_MOVE_OBJECT) return;
+    S2C_MoveObject movement{};
+    std::memcpy(&movement, packet, sizeof(movement));
+    if (movement.object_id < 0 || !std::isfinite(movement.x) ||
+        !std::isfinite(movement.y) || !std::isfinite(movement.z)) {
+        HandleDisconnect();
+        return;
+    }
+    const auto found = objects.find(movement.object_id);
+    if (found == objects.end()) return;
+    found->second.renderPos = glm::vec3(movement.x, movement.y, movement.z);
 }
 
 // [11.5]패킷 검사와 종류 구분
@@ -231,6 +437,21 @@ void GameClient::ProcessPacket(const unsigned char* packet)
     }
 
     // 종류와 길이를 확인했다.
+    if (packet[1] == S2C_GAME_START_RESULT && currentState == CLIENT_ROOM) {
+        const unsigned char success = packet[offsetof(S2C_GameStartResult, success)];
+        if (success > 1) {
+            HandleDisconnect();
+            return;
+        }
+        S2C_GameStartResult result{};
+        std::memcpy(&result, packet, sizeof(result));
+        HandleGameStartResult(result);
+        return;
+    }
+    if (currentState == CLIENT_PLAYING && packet[1] == S2C_MOVE_OBJECT) {
+        ApplyWorldPacket(packet);
+        return;
+    }
     // [11.7] 로그인 성공 응답을 받은 뒤에만 로비로 이동한다.
     if (packet[1] == S2C_LOGIN_RESULT && currentState == CLIENT_LOGIN) {
         S2C_LoginResult result{};
@@ -238,6 +459,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         if (result.result == LOGIN_OK && result.session_id >= 0) {
             mySessionId = result.session_id;
             currentState = CLIENT_LOBBY;
+            selectedRoomIndex = 0; // [11.11] 로그인 후 첫 번째 방을 선택한다.
             inputHandler.Reset();
             errorMessage.clear();
         }
@@ -251,5 +473,112 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         else {
             HandleDisconnect(); // [11.9] 오류 ( 로그인 응답 값이 잘못됨 )
         }
+    }
+
+    // [11.11] 방 입장 결과를 읽고 성공한 경우에만 대기실 상태로 바꾼다.
+    if (packet[1] == S2C_JOIN_ROOM_RESULT && currentState == CLIENT_LOBBY) {
+        S2C_JoinRoomResult result{};
+        std::memcpy(&result, packet, sizeof(result));
+        switch (result.result) {
+        case JOIN_OK:
+            if (result.room_id >= MAX_ROOMS || result.my_slot >= MAX_ROOM_PLAYERS) {
+                HandleDisconnect(); // [11.11] 성공 응답의 방·자리 번호가 잘못됐다.
+                return;
+            }
+            myRoomId = result.room_id;
+            mySlot = result.my_slot;
+            ClearWorld();
+            // [11.12] 새 방의 참가자 정보를 받을 준비를 한다.
+            for (RoomPlayerInfo& player : roomPlayers) {
+                player = {};
+                player.character = CHAR_NONE;
+            }
+            currentState = CLIENT_ROOM;
+            inputHandler.Reset();
+            errorMessage.clear();
+            break;
+        case JOIN_ROOM_FULL:
+            errorMessage = "Room is full. Choose another room.";
+            break;
+        case JOIN_ROOM_PLAYING:
+            errorMessage = "Room is already playing. Choose another room.";
+            break;
+        case JOIN_INVALID_ROOM:
+            errorMessage = "Room does not exist. Choose another room.";
+            break;
+        default:
+            HandleDisconnect(); // [11.11] 정의된 입장 결과가 아니다.
+            return;
+        }
+    }
+
+    // [11.12] 현재 방의 참가자 정보를 검사하고 저장한다.
+    if (packet[1] == S2C_ROOM_INFO && currentState == CLIENT_ROOM) {
+        S2C_RoomInfo roomInfo{};
+        std::memcpy(&roomInfo, packet, sizeof(roomInfo));
+        if (roomInfo.room_id >= MAX_ROOMS || roomInfo.room_id != myRoomId) {
+            HandleDisconnect(); // [11.12] 현재 들어간 방의 정보가 아니다.
+            return;
+        }
+
+        for (RoomPlayerInfo& player : roomInfo.players) {
+            // [11.12] 접속 여부는 0 또는 1이어야 한다.
+            unsigned char connected = 0;
+            std::memcpy(&connected, &player.connected, sizeof(connected));
+            if (connected > 1) {
+                HandleDisconnect();
+                return;
+            }
+            if (connected == 0) {
+                player = {}; // [11.12] 빈 자리의 이전 이름과 캐릭터를 지운다.
+                player.character = CHAR_NONE;
+                continue;
+            }
+            if (player.character != CHAR_STEVE && player.character != CHAR_ALEX &&
+                player.character != CHAR_NONE) {
+                HandleDisconnect(); // [11.12] 정해진 캐릭터 값이 아니다.
+                return;
+            }
+
+            // [11.12] 이름 규칙은 다시 검사하지 않고 문자열 끝만 보장한다.
+            player.name[MAX_NAME_LEN - 1] = '\0';
+        }
+
+        // [11.12] 두 자리 모두 검사가 끝나면 저장된 정보를 한 번에 바꾼다.
+        std::memcpy(roomPlayers, roomInfo.players, sizeof(roomPlayers));
+    }
+
+    // [11.10] 로비에서 받은 방 목록을 검사하고 저장한다.
+    if (packet[1] == S2C_ROOM_LIST && currentState == CLIENT_LOBBY) {
+        S2C_RoomList roomList{};
+        std::memcpy(&roomList, packet, sizeof(roomList));
+        if (roomList.room_count > MAX_ROOMS) {
+            HandleDisconnect(); // [11.10] 저장할 수 있는 방 수를 넘었다.
+            return;
+        }
+
+        RoomSummary newRooms[MAX_ROOMS]{};
+        const RoomSummary* selectedRoom = GetRoom(selectedRoomIndex); // [11.11] 갱신 전 선택한 방
+        int newSelectedIndex = 0; // [11.11] 선택한 방이 사라지면 첫 번째 방으로 돌아간다.
+        bool seenRooms[MAX_ROOMS]{}; // [11.10] 같은 방 번호가 두 번 오는지 확인한다.
+        for (int i = 0; i < roomList.room_count; ++i) {
+            const RoomSummary& room = roomList.rooms[i];
+            if (room.room_id >= MAX_ROOMS || seenRooms[room.room_id] ||
+                room.player_count > MAX_ROOM_PLAYERS ||
+                (room.state != ROOM_WAITING && room.state != ROOM_PLAYING && room.state != ROOM_RESULT)) {
+                HandleDisconnect(); // [11.10] 방 번호·인원·상태가 잘못됐다.
+                return;
+            }
+            seenRooms[room.room_id] = true;
+            newRooms[i] = room;
+            if (selectedRoom != nullptr && selectedRoom->room_id == room.room_id) {
+                newSelectedIndex = i; // [11.11] 목록 순서가 바뀌어도 같은 방을 선택한다.
+            }
+        }
+
+        // [11.10] 모든 검사가 끝나면 이전 목록을 한 번에 바꾼다.
+        std::memcpy(rooms, newRooms, sizeof(rooms));
+        roomCount = roomList.room_count;
+        selectedRoomIndex = newSelectedIndex;
     }
 }

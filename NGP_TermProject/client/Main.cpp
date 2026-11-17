@@ -62,7 +62,7 @@ static TitleScreen titleScreen;
 static FinishScreen finishScreen;
 static Winner winner = Winner::NONE;
 
-static Camera camera;
+// static Camera camera;
 static Steve_Camera steveCamera;
 static Alex_Camera alexCamera;
 static LightManager lightManager;
@@ -74,13 +74,41 @@ static KeyManager input;
 // [11.6] 시작 함수와 타이머에서 같은 클라이언트를 사용한다.
 static GameClient gameClient;
 
+static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
+static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
+static bool matchSceneInitialized = false;
+
+template<class CharacterType>
+void ReleaseCharacter(CharacterType*& character) {
+    if (!character) return;
+    for (Part* part : { &character->gBody, &character->gHead,
+        &character->gArmL, &character->gArmR, &character->gLegL,
+        &character->gLegR, &character->gBoundingBox }) {
+        glDeleteVertexArrays(1, &part->vao);
+        glDeleteBuffers(1, &part->vbo);
+        glDeleteBuffers(1, &part->nbo);
+        glDeleteBuffers(1, &part->tbo);
+    }
+    glDeleteTextures(1, &character->textureID);
+    delete character;
+    character = nullptr;
+}
+
+void ClearMatchScene() {
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        ReleaseCharacter(matchSteve[slot]);
+        ReleaseCharacter(matchAlex[slot]);
+    }
+    matchSceneInitialized = false;
+}
+
 static bool steveThrowFlag = false;
 static bool alexThrowFlag = false;
 
 static glm::vec3 stevePosition = glm::vec3(3.0f, 0.8f, 5.0f);
 static glm::vec3 alexPosition = glm::vec3(7.0f, 0.8f, 5.0f);
 
-static bool splitScreenMode = false;
+// static bool splitScreenMode = false;
 
 bool cameraLightMode = true;
 enum CharacterSelection { STEVE, ALEX };
@@ -118,8 +146,9 @@ bool InitOpenGL(int& argc, char** argv);
 // [통합 종료] 창 닫기 콜백 전용 정리 함수.
 void OnExit();
 
-void Mouse(int button, int state, int x, int y);
-void MouseMotion(int x, int y);
+void OnMouseButton(int button, int state, int x, int y);
+void OnMouseMove(int x, int y);
+void OnMouseEnterLeave(int state); // [11.12] 창 밖으로 나가면 버튼 효과를 끈다.
 void Keyboard(unsigned char key, int x, int y);
 void KeyboardUp(unsigned char key, int x, int y);
 void SpecialKeyboard(int key, int x, int y);
@@ -127,8 +156,8 @@ void SpecialKeyboardUp(int key, int x, int y);
 void TimerFunction(int value);
 
 void make_shaderProgram();
-GLvoid drawScene();
-GLvoid drawSplitScreen();
+GLvoid Drawscene();
+// GLvoid drawSplitScreen();
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection);
 GLvoid Reshape(int w, int h);
 
@@ -144,7 +173,7 @@ void initializeFaceBuffers();
 void loadFaceTextures();
 GLuint loadTexture(const char* path);
 void renderCharacterFace(GLuint textureID, float x, float y, float size, int screenWidth, int screenHeight);
-void drawCharacterFaces(int winW, int winH);
+// void drawCharacterFaces(int winW, int winH);
 
 //--- 셰이더 관련 변수들
 GLint width, height;
@@ -198,6 +227,7 @@ bool InitOpenGL(int& argc, char** argv)
 	titleScreen.initialize();
 	return true;
 }
+
 // [변경 2 끝]
 
 // [통합 종료] freeglut이 창을 닫을 때 한 번 호출한다. 직접 호출하지 않는다.
@@ -215,22 +245,9 @@ void OnExit()
 	finishScreen.cleanup();
 
 	// 기존 캐릭터에는 GL 자원 소멸자가 없으므로 종료 시 여기서 회수한다.
-	auto releaseCharacter = [](auto*& character) {
-		if (!character) return;
-		for (Part* part : { &character->gBody, &character->gHead,
-			&character->gArmL, &character->gArmR, &character->gLegL,
-			&character->gLegR, &character->gBoundingBox }) {
-			glDeleteVertexArrays(1, &part->vao);
-			glDeleteBuffers(1, &part->vbo);
-			glDeleteBuffers(1, &part->nbo);
-			glDeleteBuffers(1, &part->tbo);
-		}
-		glDeleteTextures(1, &character->textureID);
-		delete character;
-		character = nullptr;
-	};
-	releaseCharacter(steve);
-	releaseCharacter(alex);
+	ReleaseCharacter(steve);
+	ReleaseCharacter(alex);
+	ClearMatchScene();
 
 	// Block의 기존 대입 연산자가 이전 GL 자원을 해제한다.
 	// 빈 블록으로 바꿔 정적 객체 소멸 시 닫힌 창의 GL 자원을 다시 건드리지 않게 한다.
@@ -259,6 +276,7 @@ void OnExit()
 
 	std::cout << "종료 정리 완료" << std::endl;
 }
+
 // [종료 변경 3 끝]
 
 int main(int argc, char** argv)
@@ -274,14 +292,8 @@ int main(int argc, char** argv)
 	}
 
 	// [11.6] 일단 같은 PC의 서버에 접속한다. 팀 서버 연결 시 주소 변경
-	if (!gameClient.Init("127.0.0.1")) {
+	if (!gameClient.Init(gameClient.GetServerAddress())) {
 		std::cerr << "클라이언트 네트워크 초기화 실패" << std::endl;
-	}
-	else if (!gameClient.TryConnect()) {
-		std::cerr << "서버 접속 실패" << std::endl;
-	}
-	else {
-		std::cout << "서버 접속 완료" << std::endl;
 	}
 
 	std::cout << "\n=== MINECRAFT SNOWBALL FIGHT ===" << std::endl;
@@ -289,14 +301,16 @@ int main(int argc, char** argv)
 	std::cout << "종료: 창의 X 버튼" << std::endl;
 
 	//--- 콜백 등록
-	glutDisplayFunc(drawScene);
+	glutDisplayFunc(Drawscene);
 	glutReshapeFunc(Reshape);
 	glutKeyboardFunc(Keyboard);
 	glutKeyboardUpFunc(KeyboardUp);
 	glutSpecialFunc(SpecialKeyboard);
 	glutSpecialUpFunc(SpecialKeyboardUp);
-	glutMouseFunc(Mouse);
-	glutPassiveMotionFunc(MouseMotion);
+	glutMouseFunc(OnMouseButton);
+	glutPassiveMotionFunc(OnMouseMove);
+	glutMotionFunc(OnMouseMove); // [11.12] 누른 채 움직일 때도 위치 갱신
+	glutEntryFunc(OnMouseEnterLeave);
 	glutTimerFunc(16, TimerFunction, 1);
 	glutMainLoop();
 
@@ -436,28 +450,22 @@ void renderCharacterFace(GLuint textureID, float x, float y, float size, int scr
 	glDisable(GL_BLEND);
 }
 
-void drawCharacterFaces(int winW, int winH)
-{
-	if (!splitScreenMode || currentGameState != GameState::FIRST_PERSON_MODE) return;
-	if (!faceTexturesLoaded) return;
-
-	const float faceSize = 40.0f;
-	const float margin = 40.0f;
-
-	float steveX = margin;
-	float steveY = winH - faceSize - margin;
-
-	float alexX = margin;
-	float alexY = winH - faceSize - margin;
-
-	glViewport(0, 0, winW / 2, winH);
-	renderCharacterFace(steveFaceTextureID, steveX, steveY, faceSize, winW / 2, winH);
-
-	glViewport(winW / 2, 0, winW - winW / 2, winH);
-	renderCharacterFace(alexFaceTextureID, alexX, alexY, faceSize, winW - winW / 2, winH);
-
-	glViewport(0, 0, winW, winH);
-}
+// void drawCharacterFaces(int winW, int winH)
+// {
+// 	if (!splitScreenMode || currentGameState != GameState::FIRST_PERSON_MODE) return;
+// 	if (!faceTexturesLoaded) return;
+// 	const float faceSize = 40.0f;
+// 	const float margin = 40.0f;
+// 	float steveX = margin;
+// 	float steveY = winH - faceSize - margin;
+// 	float alexX = margin;
+// 	float alexY = winH - faceSize - margin;
+// 	glViewport(0, 0, winW / 2, winH);
+// 	renderCharacterFace(steveFaceTextureID, steveX, steveY, faceSize, winW / 2, winH);
+// 	glViewport(winW / 2, 0, winW - winW / 2, winH);
+// 	renderCharacterFace(alexFaceTextureID, alexX, alexY, faceSize, winW - winW / 2, winH);
+// 	glViewport(0, 0, winW, winH);
+// }
 
 void initializeGame() {
 	lightManager.setupDefaultLighting();
@@ -477,23 +485,24 @@ void initializeGame() {
 	initializeFaceBuffers();
 	loadFaceTextures();
 
-	if (currentGameState == GameState::FIRST_PERSON_MODE) {
-		splitScreenMode = true;
-		std::cout << "\n=== 1인칭 모드 조작법 ===" << std::endl;
-		std::cout << "V: 분할 화면 모드 토글" << std::endl;
-		std::cout << "WASD: Steve 1인칭 시점 회전" << std::endl;
-		std::cout << "화살표 키: Alex 1인칭 시점 회전" << std::endl;
-		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
-		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
-	}
-	else {
-		splitScreenMode = false;
-		std::cout << "\n=== 3인칭 모드 조작법 ===" << std::endl;
-		std::cout << "V: 분할 화면 모드 토글" << std::endl;
-		std::cout << "화살표 키: 카메라 회전" << std::endl;
-		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
-		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
-	}
+// 	if (currentGameState == GameState::FIRST_PERSON_MODE) {
+// 		splitScreenMode = true;
+// 		std::cout << "\n=== 1인칭 모드 조작법 ===" << std::endl;
+// 		std::cout << "V: 분할 화면 모드 토글" << std::endl;
+// 		std::cout << "WASD: Steve 1인칭 시점 회전" << std::endl;
+// 		std::cout << "화살표 키: Alex 1인칭 시점 회전" << std::endl;
+// 		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
+// 		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
+// 	}
+// 	else {
+// 		splitScreenMode = false;
+// 		std::cout << "\n=== 3인칭 모드 조작법 ===" << std::endl;
+// 		std::cout << "V: 분할 화면 모드 토글" << std::endl;
+// 		std::cout << "화살표 키: 카메라 회전" << std::endl;
+// 		std::cout << "IJKL: 선택된 캐릭터 이동 (앞/왼/뒤/오른)" << std::endl;
+// 		std::cout << "TAB: 캐릭터 선택 (Steve/Alex)" << std::endl;
+// 	}
+
 	std::cout << "E: Steve 눈덩이 발사" << std::endl;
 	std::cout << "O: Alex 눈덩이 발사" << std::endl;
 	std::cout << "X: 모든 눈 제거" << std::endl;
@@ -504,13 +513,23 @@ void initializeGame() {
 
 void Keyboard(unsigned char key, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_PLAYING) {
+		gameClient.OnKeyDown(key);
+		return;
+	}
 	// [11.6]
-	if (gameClient.GetState() == CLIENT_LOGIN) {
+	// [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
+	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) { // [11.11] Enter 입력 전달
 		gameClient.OnKeyDown(key);
 		glutPostRedisplay();
 		return;
 	}
-	if (gameClient.GetState() == CLIENT_LOBBY) return; // [11.7] 로비에서 기존 로컬 게임 시작을 막는다.
+	// [11.11] 대기실 입력은 다음 단계에서 연결한다.
+	if (gameClient.GetState() == CLIENT_ROOM) { // [11.12] Esc 퇴장 입력을 전달한다.
+		gameClient.OnKeyDown(key);
+		glutPostRedisplay();
+		return;
+	}
 
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		GameState newState = titleScreen.handleKeyInput(key);
@@ -542,10 +561,11 @@ void Keyboard(unsigned char key, int x, int y)
 	input.pressKey(static_cast<int>(key));
 
 	switch (key) {
-	case 'v': case 'V':
-		splitScreenMode = !splitScreenMode;
-		std::cout << "분할 화면 모드: " << (splitScreenMode ? "ON" : "OFF") << std::endl;
-		break;
+// 	case 'v': case 'V':
+// 		splitScreenMode = !splitScreenMode;
+// 		std::cout << "분할 화면 모드: " << (splitScreenMode ? "ON" : "OFF") << std::endl;
+// 		break;
+
 	case 9:
 		activeCharacter = (activeCharacter == STEVE) ? ALEX : STEVE;
 		std::cout << "현재 선택된 캐릭터: " << (activeCharacter == STEVE ? "Steve" : "Alex") << std::endl;
@@ -579,6 +599,10 @@ void Keyboard(unsigned char key, int x, int y)
 
 void KeyboardUp(unsigned char key, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_PLAYING) {
+		gameClient.OnKeyUp(key);
+		return;
+	}
 	// [11.6]
 	if (gameClient.GetState() == CLIENT_LOGIN) return;
 
@@ -701,19 +725,28 @@ void checkAllSnowballCollisions()
 
 void SpecialKeyboard(int key, int x, int y)
 {
+	// [11.11] 로비에서는 위·아래 방향키로 방 선택만 바꾼다.
+	if (gameClient.GetState() == CLIENT_LOBBY) {
+		if (key == GLUT_KEY_UP) gameClient.MoveRoomSelection(-1);
+		else if (key == GLUT_KEY_DOWN) gameClient.MoveRoomSelection(1);
+		glutPostRedisplay();
+		return;
+	}
+
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}
 
 	input.pressSpecial(key);
 
-	float deltaTime = 0.016f;
-	if (!splitScreenMode || currentGameState == GameState::THIRD_PERSON_MODE) {
-		camera.processSpecialKeyboard(key);
-		cameraPos = camera.position;
-		cameraFront = camera.front;
-		cameraUp = camera.up;
-	}
+// 	float deltaTime = 0.016f;
+// 	if (!splitScreenMode || currentGameState == GameState::THIRD_PERSON_MODE) {
+// 		camera.processSpecialKeyboard(key);
+// 		cameraPos = camera.position;
+// 		cameraFront = camera.front;
+// 		cameraUp = camera.up;
+// 	}
+
 	glutPostRedisplay();
 }
 
@@ -727,50 +760,110 @@ void SpecialKeyboardUp(int key, int x, int y)
 	glutPostRedisplay();
 }
 
-void Mouse(int button, int state, int x, int y)
+void OnMouseButton(int button, int state, int x, int y)
 {
+    if (gameClient.GetState() == CLIENT_PLAYING) return;
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
-		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN &&
-			titleScreen.hitsStart(x, y, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT))) {
-			gameClient.OnKeyDown('\r'); // 엔터키랑 같은 처리
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+			const int width = glutGet(GLUT_WINDOW_WIDTH);
+			const int height = glutGet(GLUT_WINDOW_HEIGHT);
+			if (titleScreen.IsMouseOverLoginInput(x, y, width, height, true)) {
+				gameClient.FocusServerAddress(true);
+			}
+			else if (titleScreen.IsMouseOverLoginInput(x, y, width, height, false)) {
+				gameClient.FocusServerAddress(false);
+			}
+			else if (titleScreen.hitsStart(x, y, width, height)) {
+				gameClient.OnKeyDown('\r'); // 엔터키랑 같은 처리
+			}
 		}
 		glutPostRedisplay();
 		return;
 	}
 	if (gameClient.GetState() == CLIENT_LOBBY) return;
+	// [11.12] 나가기 버튼 클릭도 Esc와 같은 퇴장 처리로 보낸다.
+	if (gameClient.GetState() == CLIENT_ROOM) {
+		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+			const int width = glutGet(GLUT_WINDOW_WIDTH);
+			const int height = glutGet(GLUT_WINDOW_HEIGHT);
+			titleScreen.SetMousePosition(x, y);
+			if (titleScreen.IsMouseOverBackButton(x, y, width, height)) {
+				gameClient.OnKeyDown(27);
+			}
+			else {
+				// [11.14] 화살표 클릭은 서버 전송 없이 내 미리보기만 바꾼다.
+				const RoomPlayerInfo* me = gameClient.GetRoomPlayer(gameClient.GetMySlot());
+				if (me != nullptr && me->connected) {
+					const bool confirmed = gameClient.IsCharacterConfirmed();
+					if (!confirmed && titleScreen.IsMouseOverCharacterArrow(x, y, width, height, true)) {
+						titleScreen.ChangeCharacterPreview(-1, me->character);
+					}
+					else if (!confirmed && titleScreen.IsMouseOverCharacterArrow(x, y, width, height, false)) {
+						titleScreen.ChangeCharacterPreview(1, me->character);
+					}
+					else if (!confirmed && titleScreen.IsMouseOverCharacterConfirm(x, y, width, height)) {
+						// [11.14] 현재 표시 중인 캐릭터를 기존 송신 버퍼에 등록한다.
+						C2S_SelectCharacter request{};
+						request.type = C2S_SELECT_CHARACTER;
+						request.character = static_cast<CHARACTER_TYPE>(titleScreen.GetPreviewCharacter(me->character));
+						gameClient.QueueRequest(&request, sizeof(request));
+					}
+					else if (titleScreen.IsMouseOverGameStartButton(x, y, width, height)) {
+						C2S_GameStart request{};
+						request.type = C2S_GAME_START;
+						gameClient.QueueRequest(&request, sizeof(request));
+					}
+				}
+			}
+		}
+		glutPostRedisplay();
+		return;
+	}
 	if (currentGameState == GameState::TITLE_SCREEN) {
 		return;
 	}
 
-	// 마우스 휠로 줌 인/아웃
-	if (button == 3) { // 휠 위로
-		if (splitScreenMode) {
-			steveCamera.processMouseScroll(1);
-			alexCamera.processMouseScroll(1);
-		}
-		else {
-			camera.processMouseScroll(1);
-			cameraPos = camera.position;
-		}
-		glutPostRedisplay();
-	}
-	else if (button == 4) { // 휠 아래로
-		if (splitScreenMode) {
-			steveCamera.processMouseScroll(-1);
-			alexCamera.processMouseScroll(-1);
-		}
-		else {
-			camera.processMouseScroll(-1);
-			cameraPos = camera.position;
-		}
-		glutPostRedisplay();
-	}
+// 	// 마우스 휠로 줌 인/아웃
+// 	if (button == 3) { // 휠 위로
+// 		if (splitScreenMode) {
+// 			steveCamera.processMouseScroll(1);
+// 			alexCamera.processMouseScroll(1);
+// 		}
+// 		else {
+// 			camera.processMouseScroll(1);
+// 			cameraPos = camera.position;
+// 		}
+// 		glutPostRedisplay();
+// 	}
+// 	else if (button == 4) { // 휠 아래로
+// 		if (splitScreenMode) {
+// 			steveCamera.processMouseScroll(-1);
+// 			alexCamera.processMouseScroll(-1);
+// 		}
+// 		else {
+// 			camera.processMouseScroll(-1);
+// 			cameraPos = camera.position;
+// 		}
+// 		glutPostRedisplay();
+// 	}
+
 }
 
-void MouseMotion(int x, int y)
+void OnMouseMove(int x, int y)
 {
+    // [11.12] 마우스 위치를 전달하면 대기실을 그릴 때 이미지를 고른다.
+    titleScreen.SetMousePosition(x, y);
+    glutPostRedisplay();
+}
 
+void OnMouseEnterLeave(int state)
+{
+    // [11.12] 창 밖에서는 마우스 올림 효과를 남기지 않는다.
+    if (state == GLUT_LEFT) {
+        titleScreen.SetMousePosition(-1, -1);
+        glutPostRedisplay();
+    }
 }
 
 void make_shaderProgram()
@@ -831,74 +924,120 @@ void make_shaderProgram()
 	std::cout << "셰이더 프로그램이 성공적으로 생성되었습니다." << std::endl;
 }
 
-GLvoid drawScene()
+GLvoid Drawscene()
 {
 	if (shaderProgramID == 0) return;
+	// [11.14] 로비·로그인 등에서는 이전 대기실 미리보기를 비운다.
+	if (gameClient.GetState() != CLIENT_ROOM) titleScreen.ResetCharacterPreview();
+	if (gameClient.GetState() != CLIENT_PLAYING && matchSceneInitialized) ClearMatchScene();
 	glUseProgram(shaderProgramID);
 	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
-	if (gameClient.GetState() == CLIENT_LOGIN || gameClient.GetState() == CLIENT_LOBBY) {
+
+	switch (gameClient.GetState()) {
+	case CLIENT_LOGIN:
 		// [11.7] 닉네임 오류가 발생한 프레임에만 버튼 효과를 시작한다.
 		if (gameClient.ConsumeNameError()) titleScreen.PlayNameError();
 		titleScreen.render(shaderProgramID);
+		// [11.7] 닉네임과 버튼은 배경 이미지 위에 매 프레임 따로 그린다.
 		titleScreen.renderLoginUI(shaderProgramID, gameClient.GetName(), gameClient.GetErrorMessage(),
-			gameClient.GetState() == CLIENT_LOBBY);
-		glutSwapBuffers();
-		return;
+			false, gameClient.GetServerAddress(),
+			gameClient.IsServerAddressFocused(), gameClient.IsServerAddressSelected());
+		break;
+
+	case CLIENT_LOBBY: // [11.10] 로그인 성공 후 로비 이미지를 그린다.
+		// [11.11] 현재 선택 위치를 화면에도 전달한다.
+		titleScreen.renderLobby(shaderProgramID, gameClient.GetRoom(0), gameClient.GetRoomCount(),
+			gameClient.GetSelectedRoomIndex(), gameClient.GetErrorMessage());
+		break;
+
+	case CLIENT_ROOM: // [11.11] 서버가 입장을 허용한 뒤 안내를 표시한다.
+		// [11.12] 저장된 두 자리 참가자 정보를 화면에 전달한다.
+		titleScreen.renderRoomEntry(shaderProgramID, gameClient.GetMyRoomId(), gameClient.GetMySlot(),
+			gameClient.GetRoomPlayer(0));
+		break;
+
+	case CLIENT_PLAYING: {
+        if (!matchSceneInitialized) {
+            gameMap.initialize();
+            for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+                const ClientObject* player = gameClient.GetObject(slot);
+                if (player->character == CHAR_STEVE)
+                    matchSteve[slot] = new Steve::Character("steve.png");
+                else
+                    matchAlex[slot] = new Alex::Character("alex.png");
+            }
+            matchSceneInitialized = true;
+        }
+        const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
+        const int winH = std::max(1, glutGet(GLUT_WINDOW_HEIGHT));
+        glViewport(0, 0, winW, winH);
+        const ClientObject* me = gameClient.GetObject(gameClient.GetMySlot());
+        glm::mat4 view(1.0f), projection(1.0f);
+        if (gameClient.GetMySlot() == 0) {
+            steveCamera.updateFromCharacterPosition(me->renderPos);
+            cameraPos = steveCamera.getPosition();
+            view = steveCamera.getViewMatrix();
+            projection = steveCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
+        }
+        else {
+            alexCamera.updateFromCharacterPosition(me->renderPos);
+            cameraPos = alexCamera.getPosition();
+            view = alexCamera.getViewMatrix();
+            projection = alexCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
+        }
+        renderWorld(view, projection);
+		break;
 	}
 
-	if (currentGameState == GameState::TITLE_SCREEN) {
-		titleScreen.render(shaderProgramID);
-		glutSwapBuffers();
-		return;
-	}
-
-	if (currentGameState == GameState::FINISH_SCREEN) {
-		finishScreen.render(shaderProgramID);
-		glutSwapBuffers();
-		return;
-	}
-
-	int winW = glutGet(GLUT_WINDOW_WIDTH);
-	int winH = glutGet(GLUT_WINDOW_HEIGHT);
-	if (winW <= 0) winW = WinX;
-	if (winH <= 0) winH = WinY;
-
-	if (splitScreenMode && currentGameState == GameState::FIRST_PERSON_MODE) {
-		if (steve) steveCamera.updateFromCharacterPosition(steve->pos);
-		if (alex) alexCamera.updateFromCharacterPosition(alex->pos);
-
-		// 왼쪽: Steve
-		glViewport(0, 0, winW / 2, winH);
-		glm::mat4 steveView = steveCamera.getViewMatrix();
-		glm::mat4 steveProj = steveCamera.getProjectionMatrix(winW / 2, winH);
-		renderWorld(steveView, steveProj);
-
-		glClear(GL_DEPTH_BUFFER_BIT);
-
-		// 오른쪽: Alex
-		glViewport(winW / 2, 0, winW - winW / 2, winH);
-		glm::mat4 alexView = alexCamera.getViewMatrix();
-		glm::mat4 alexProj = alexCamera.getProjectionMatrix(winW - winW / 2, winH);
-		renderWorld(alexView, alexProj);
-
-		drawCharacterFaces(winW, winH);
-	}
-	else {
-		glViewport(0, 0, winW, winH);
-		glm::mat4 view = camera.getViewMatrix();
-		glm::mat4 proj = camera.getProjectionMatrix(winW, winH);
-		renderWorld(view, proj);
+	case CLIENT_RESULT:
+		break;
 	}
 
 	glutSwapBuffers();
 }
 
-GLvoid drawSplitScreen() 
-{
-	
-}
+// 	if (currentGameState == GameState::TITLE_SCREEN) {
+// 		titleScreen.render(shaderProgramID);
+// 		glutSwapBuffers();
+// 		return;
+// 	}
+// 	if (currentGameState == GameState::FINISH_SCREEN) {
+// 		finishScreen.render(shaderProgramID);
+// 		glutSwapBuffers();
+// 		return;
+// 	}
+
+// 	int winW = glutGet(GLUT_WINDOW_WIDTH);
+// 	int winH = glutGet(GLUT_WINDOW_HEIGHT);
+// 	if (winW <= 0) winW = WinX;
+// 	if (winH <= 0) winH = WinY;
+// 	if (splitScreenMode && currentGameState == GameState::FIRST_PERSON_MODE) {
+// 		if (steve) steveCamera.updateFromCharacterPosition(steve->pos);
+// 		if (alex) alexCamera.updateFromCharacterPosition(alex->pos);
+// 		// 왼쪽: Steve
+// 		glViewport(0, 0, winW / 2, winH);
+// 		glm::mat4 steveView = steveCamera.getViewMatrix();
+// 		glm::mat4 steveProj = steveCamera.getProjectionMatrix(winW / 2, winH);
+// 		renderWorld(steveView, steveProj);
+// 		glClear(GL_DEPTH_BUFFER_BIT);
+// 		// 오른쪽: Alex
+// 		glViewport(winW / 2, 0, winW - winW / 2, winH);
+// 		glm::mat4 alexView = alexCamera.getViewMatrix();
+// 		glm::mat4 alexProj = alexCamera.getProjectionMatrix(winW - winW / 2, winH);
+// 		renderWorld(alexView, alexProj);
+// 		drawCharacterFaces(winW, winH);
+// 	}
+// 	else {
+// 		glViewport(0, 0, winW, winH);
+// 		glm::mat4 view = camera.getViewMatrix();
+// 		glm::mat4 proj = camera.getProjectionMatrix(winW, winH);
+// 		renderWorld(view, proj);
+// 	}
+
+// GLvoid drawSplitScreen()
+// {
+// }
 
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 {
@@ -934,6 +1073,23 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 	if (useTextureLoc != -1) glUniform1i(useTextureLoc, 0);
 	gameMap.render();
 
+    if (gameClient.GetState() == CLIENT_PLAYING) {
+        if (viewPosLoc != -1) glUniform3fv(viewPosLoc, 1, &cameraPos[0]);
+        if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject* player = gameClient.GetObject(slot);
+            const float facing = slot == 0 ? 0.0f : 180.0f;
+            if (matchSteve[slot]) {
+                matchSteve[slot]->pos = player->renderPos;
+                if (slot != gameClient.GetMySlot()) matchSteve[slot]->draw(modelLoc, facing);
+            }
+            if (matchAlex[slot]) {
+                matchAlex[slot]->pos = player->renderPos;
+                if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
+            }
+        }
+        return;
+    }
 	if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
 	snowSystem.render(shaderProgramID);
 
@@ -957,40 +1113,38 @@ GLvoid Reshape(int w, int h)
 	glViewport(0, 0, w, h);
 }
 
-void updateStevePosition(float deltaTime)
-{
-	steve->moveDir = glm::vec2(0.0f, 0.0f);
-
-	if (splitScreenMode) {
-		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.y += 1.0f;
-		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.y += -1.0f;
-		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.x += 1.0f;
-		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.x += -1.0f;
-	}
-	else {
-		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.x += 1.0f;
-		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.x += -1.0f;
-		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.y += -1.0f;
-		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.y += 1.0f;
-	}
-}
-
-void updateAlexPosition(float deltaTime)
-{
-	alex->moveDir = glm::vec2(0.0f, 0.0f);
-	if (splitScreenMode) {
-		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.y += -1.0f;
-		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.y += 1.0f;
-		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.x += -1.0f;
-		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.x += 1.0f;
-	}
-	else {
-		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.x += 1.0f;
-		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.x += -1.0f;
-		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.y += -1.0f;
-		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.y += 1.0f;
-	}
-}
+// void updateStevePosition(float deltaTime)
+// {
+// 	steve->moveDir = glm::vec2(0.0f, 0.0f);
+// 	if (splitScreenMode) {
+// 		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.y += 1.0f;
+// 		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.x += -1.0f;
+// 	}
+// 	else {
+// 		if (input.isKeyDown('w') || input.isKeyDown('W')) steve->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('s') || input.isKeyDown('S')) steve->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('a') || input.isKeyDown('A')) steve->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('d') || input.isKeyDown('D')) steve->moveDir.y += 1.0f;
+// 	}
+// }
+// void updateAlexPosition(float deltaTime)
+// {
+// 	alex->moveDir = glm::vec2(0.0f, 0.0f);
+// 	if (splitScreenMode) {
+// 		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.y += 1.0f;
+// 		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.x += 1.0f;
+// 	}
+// 	else {
+// 		if (input.isKeyDown('i') || input.isKeyDown('I')) alex->moveDir.x += 1.0f;
+// 		if (input.isKeyDown('k') || input.isKeyDown('K')) alex->moveDir.x += -1.0f;
+// 		if (input.isKeyDown('j') || input.isKeyDown('J')) alex->moveDir.y += -1.0f;
+// 		if (input.isKeyDown('l') || input.isKeyDown('L')) alex->moveDir.y += 1.0f;
+// 	}
+// }
 
 void checkSteveMoving()
 {
@@ -1046,8 +1200,8 @@ void TimerFunction(int value)
 	}
 
 	// 캐릭터 업데이트
-	updateStevePosition(deltaTime);
-	updateAlexPosition(deltaTime);
+	// updateStevePosition(deltaTime);
+	// updateAlexPosition(deltaTime);
 
 	if (steve) steve->update(gameMap, snowSystem);
 	if (alex) alex->update(gameMap, snowSystem);
@@ -1055,9 +1209,9 @@ void TimerFunction(int value)
 	checkSteveMoving();
 	checkAlexMoving();
 
-	cameraPos = camera.position;
-	cameraFront = camera.front;
-	cameraUp = camera.up;
+	// cameraPos = camera.position;
+	// cameraFront = camera.front;
+	// cameraUp = camera.up;
 
 	glutPostRedisplay();
 	glutTimerFunc(16, TimerFunction, 1);

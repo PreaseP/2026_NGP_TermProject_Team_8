@@ -251,7 +251,7 @@ namespace Alex {
 			glBindVertexArray(0);
 		}
 
-		void draw(GLuint modelLoc) {
+		void draw(GLuint modelLoc, float facingOffset = 0.0f) {
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, textureID);
 
@@ -263,7 +263,7 @@ namespace Alex {
 				};
 
 			glm::mat4 Mbase = glm::translate(glm::mat4(1.0f), pos);
-			Mbase = glm::rotate(Mbase, glm::radians(180.0f), glm::vec3(0, 1, 0));
+			Mbase = glm::rotate(Mbase, glm::radians(180.0f + facingOffset), glm::vec3(0, 1, 0));
 
 			float alArm = armAngle;
 			float arArm = -alArm;
