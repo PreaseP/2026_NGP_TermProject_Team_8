@@ -61,4 +61,7 @@ public:
     static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
     void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
+    void StartCharge(int slot, ULONGLONG now); // 눈덩이 차징 시작
+    void ThrowSnowball(int slot, ULONGLONG now); // 차징에 따라 눈덩이 던지기
+    int AllocSnowballId();
 };

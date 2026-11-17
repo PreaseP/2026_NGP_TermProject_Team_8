@@ -160,6 +160,14 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         room.players[session->slot].moveKeys = packet.move_keys & MOVE_KEY_MASK;
         break;
     }
+    case C2S_CHARGE_START:
+        if (session->roomId != INVALID_ID)
+            rooms[session->roomId].StartCharge(session->slot, GetTickCount64());
+        break;
+    case C2S_THROW:
+        if (session->roomId != INVALID_ID)
+            rooms[session->roomId].ThrowSnowball(session->slot, GetTickCount64());
+        break;
     case C2S_GAME_START: {
         if (session->roomId == INVALID_ID)
             break;

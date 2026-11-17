@@ -224,3 +224,81 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
         }
     }
 }
+
+void Room::StartCharge(int slot, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+
+    PlayerState& player = players[slot];
+    if (player.charging || now < player.throwEndMs)
+        return;
+
+    player.charging = true;
+    player.chargeStartMs = now;
+}
+
+int Room::AllocSnowballId()
+{
+    const int id = nextSnowballID;
+    ++nextSnowballID;
+    if (nextSnowballID >= OBJ_ID_SNOW_WALL_START)
+        nextSnowballID = OBJ_ID_SNOWBALL_START;
+    return id;
+}
+
+void Room::ThrowSnowball(int slot, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+
+    PlayerState& player = players[slot];
+    if (!player.charging || player.character == CHAR_NONE)
+        return;
+
+    player.charging = false;
+
+    Snowball* snowball = nullptr;
+    for (Snowball& candidate : snowballs) {
+        if (!candidate.active) {
+            snowball = &candidate;
+            break;
+        }
+    }
+    if (snowball == nullptr)
+        return;
+
+    const ULONGLONG chargeMs = std::min<ULONGLONG>(now - player.chargeStartMs, MAX_CHARGE_MS);
+    const float charge = static_cast<float>(chargeMs) / MAX_CHARGE_MS;
+    const float speed = (MIN_THROW_SPEED + (MAX_THROW_SPEED - MIN_THROW_SPEED) * charge)
+        * CHARACTER_STATS[player.character].throwPower;
+
+    const glm::vec3 direction = glm::normalize(glm::vec3(0.0f, THROW_DIR_UP, FORWARD_Z[slot]));
+
+    snowball->active = true;
+    snowball->objectId = AllocSnowballId();
+    snowball->ownerSlot = static_cast<unsigned char>(slot);
+    snowball->powered = player.powerUp;
+    snowball->pos = player.pos + glm::vec3(0.0f, THROW_START_UP, FORWARD_Z[slot] * THROW_START_FORWARD);
+    snowball->vel = direction * speed;
+    snowball->lifeTime = 0.0f;
+
+    player.throwEndMs = now + THROW_ANIM_MS;
+    if (player.powerUp) {
+        player.powerUp = false;
+        SendStatusChange(slot, STATUS_POWER_UP, 0.0f);
+    }
+
+    S2C_AddObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ADD_OBJECT;
+    packet.object_id = snowball->objectId;
+    packet.obj_type = OBJ_SNOWBALL;
+    packet.owner_slot = snowball->ownerSlot;
+    packet.x = snowball->pos.x;
+    packet.y = snowball->pos.y;
+    packet.z = snowball->pos.z;
+    packet.height = 0.0f;
+    packet.powered = snowball->powered;
+    Broadcast(&packet);
+}
