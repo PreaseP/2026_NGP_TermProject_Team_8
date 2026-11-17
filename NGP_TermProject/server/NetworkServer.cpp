@@ -2,6 +2,7 @@
 
 #include <climits>
 #include <cstdio>
+#include <cstring>
 
 namespace {
 	constexpr int POLL_TIMEOUT_MS = 5;
@@ -152,9 +153,25 @@ void NetworkServer::ProcessSendQueue()
 			std::fprintf(stderr, "Invalid send request size for session %d.\n", request.targetSessionId);
 			continue;
 		}
-		if (request.packetSize > 0 && !target->QueueSendData(request.packetData, request.packetSize)) {
-			DisconnectClient(target);
-			continue;
+
+		if (request.packetSize > 0) {
+			const int pendingSize = target->sendSize - target->sendOffset;
+			if (request.packetSize > SEND_BUFFER_SIZE - pendingSize) {
+				DisconnectClient(target);
+				continue;
+			}
+
+			if (request.packetSize > SEND_BUFFER_SIZE - target->sendSize) {
+				std::memmove(target->sendBuffer,
+					target->sendBuffer + target->sendOffset,
+					pendingSize);
+				target->sendSize = pendingSize;
+				target->sendOffset = 0;
+			}
+
+			std::memcpy(target->sendBuffer + target->sendSize,
+				request.packetData, request.packetSize);
+			target->sendSize += request.packetSize;
 		}
 
 		if (request.closeAfterSend) {
@@ -200,7 +217,14 @@ void NetworkServer::AcceptClients()
 			continue;
 		}
 
-		freeSlot->Init(clientSocket, nextSessionId);
+		freeSlot->inUse = true;
+		freeSlot->sessionId = nextSessionId;
+		freeSlot->socket = clientSocket;
+		freeSlot->recvSize = 0;
+		freeSlot->sendSize = 0;
+		freeSlot->sendOffset = 0;
+		freeSlot->closeAfterSend = false;
+		freeSlot->recvStalled = false;
 
 		RecvEvent event{};
 		event.kind = RECV_EVENT_CONNECTED;

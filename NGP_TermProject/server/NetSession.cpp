@@ -4,18 +4,6 @@
 
 #include <cstring>
 
-void NetSession::Init(SOCKET clientSocket, int newSessionId)
-{
-	inUse = true;
-	sessionId = newSessionId;
-	socket = clientSocket;
-	recvSize = 0;
-	sendSize = 0;
-	sendOffset = 0;
-	closeAfterSend = false;
-	recvStalled = false;
-}
-
 NET_RESULT NetSession::ReceivePackets(RecvEventQueue* recvQueue, bool readSocket)
 {
 	if (!inUse || recvQueue == nullptr) {
@@ -75,28 +63,6 @@ NET_RESULT NetSession::ReceivePackets(RecvEventQueue* recvQueue, bool readSocket
 		recvSize += received;
 		readSocket = false;
 	}
-}
-
-bool NetSession::QueueSendData(const unsigned char* data, int size)
-{
-	if (!inUse || data == nullptr || size <= 0) {
-		return false;
-	}
-
-	const int pendingSize = sendSize - sendOffset;
-	if (size > SEND_BUFFER_SIZE - pendingSize) {
-		return false;
-	}
-
-	if (size > SEND_BUFFER_SIZE - sendSize) {
-		std::memmove(sendBuffer, sendBuffer + sendOffset, pendingSize);
-		sendSize = pendingSize;
-		sendOffset = 0;
-	}
-
-	std::memcpy(sendBuffer + sendSize, data, size);
-	sendSize += size;
-	return true;
 }
 
 NET_RESULT NetSession::FlushSendBuffer()
