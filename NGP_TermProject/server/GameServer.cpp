@@ -6,7 +6,24 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
     if (gameServer == nullptr)
         return 1;
 
-    return gameServer->ThreadMain();
+    ULONGLONG lastTick = GetTickCount64();
+
+    while (WaitForSingleObject(gameServer->server.stopEvent, 1) == WAIT_TIMEOUT) {
+        gameServer->ProcessRecvEvents();
+
+        const ULONGLONG now = GetTickCount64();
+        if (now - lastTick < TICK_MS)
+            continue;
+
+        const float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        lastTick = now;
+
+        for (Room& room : gameServer->rooms) {
+            if (room.state == ROOM_PLAYING)
+                room.UpdateCharacters(now, dt);
+        }
+    }
+    return 0;
 }
 
 bool GameServer::Init(RecvEventQueue* recvQueue, SendRequestQueue* sendQueue, HANDLE stopEvent)
@@ -39,14 +56,27 @@ void GameServer::ProcessRecvEvents()
 
         switch (event.kind) {
         case RECV_EVENT_CONNECTED:
-            OnConnected(event.sessionId);
+            for (GameSession& session : sessions) {
+                if (!session.inUse) {
+                    session.Init(event.sessionId);
+                    break;
+                }
+            }
             break;
         case RECV_EVENT_PACKET:
             OnPacket(event.sessionId, event.packetData, event.packetSize);
             break;
-        case RECV_EVENT_DISCONNECTED:
-            OnDisconnected(event.sessionId);
+        case RECV_EVENT_DISCONNECTED: {
+            GameSession* session = FindGameSession(event.sessionId);
+            if (session == nullptr)
+                break;
+
+            LeaveRoomInternal(session);
+            if (session->loggedIn)
+                --loggedInCount;
+            session->Reset();
             break;
+        }
         }
     }
 }
@@ -101,15 +131,46 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
     case C2S_LEAVE_ROOM:
         LeaveRoomInternal(session);
         break;
-    case C2S_SELECT_CHARACTER:
-        HandleSelectCharacter(session, *reinterpret_cast<const C2S_SelectCharacter*>(data));
+    case C2S_SELECT_CHARACTER: {
+        const C2S_SelectCharacter& packet = *reinterpret_cast<const C2S_SelectCharacter*>(data);
+        if (session->roomId == INVALID_ID)
+            break;
+        if (packet.character != CHAR_STEVE && packet.character != CHAR_ALEX)
+            break;
+
+        Room& room = rooms[session->roomId];
+        if (room.state != ROOM_WAITING)
+            break;
+
+        room.SelectCharacter(session->slot, packet.character);
+        room.SendRoomInfo();
         break;
-    case C2S_MOVE:
-        HandleMove(session, *reinterpret_cast<const C2S_Move*>(data));
+    }
+    case C2S_MOVE: {
+        const C2S_Move& packet = *reinterpret_cast<const C2S_Move*>(data);
+        if (session->roomId == INVALID_ID)
+            break;
+
+        rooms[session->roomId].SetMoveKeys(session->slot, packet.move_keys);
         break;
-    case C2S_GAME_START:
-        HandleGameStart(session, *reinterpret_cast<const C2S_GameStart*>(data));
+    }
+    case C2S_GAME_START: {
+        if (session->roomId == INVALID_ID)
+            break;
+
+        Room& room = rooms[session->roomId];
+        if (room.StartGame(GetTickCount64()))
+            break;
+
+        S2C_GameStartResult fail{};
+        fail.size = sizeof(fail);
+        fail.type = S2C_GAME_START_RESULT;
+        fail.success = false;
+        for (int i = 0; i < MAX_ROOM_PLAYERS; ++i)
+            fail.character[i] = CHAR_NONE;
+        SendPacket(session->sessionId, &fail);
         break;
+    }
     default:
         break;
     }
@@ -120,9 +181,15 @@ void GameServer::HandleLogin(GameSession* session, const C2S_Login& packet)
     if (session->loggedIn)
         return;
 
+    S2C_LoginResult result{};
+    result.size = sizeof(result);
+    result.type = S2C_LOGIN_RESULT;
+    result.session_id = session->sessionId;
+
     // 정원이 차면 실패 응답 후 연결을 끊는다.
     if (loggedInCount >= MAX_LOGIN_USERS) {
-        SendLoginFailAndClose(session->sessionId, LOGIN_SERVER_FULL);
+        result.result = LOGIN_SERVER_FULL;
+        SendPacket(session->sessionId, &result, true);
         return;
     }
 
@@ -131,13 +198,18 @@ void GameServer::HandleLogin(GameSession* session, const C2S_Login& packet)
     memcpy(name, packet.name, MAX_NAME_LEN);
     name[MAX_NAME_LEN - 1] = '\0';
 
-    S2C_LoginResult result{};
-    result.size = sizeof(result);
-    result.type = S2C_LOGIN_RESULT;
-    result.session_id = session->sessionId;
+    int length = 0;
+    bool validName = true;
+    while (name[length] != '\0') {
+        const char c = name[length];
+        const bool isAlnum = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+        if (!isAlnum)
+            validName = false;
+        ++length;
+    }
 
     // 이름이 잘못되면 연결은 유지해서 다시 입력할 수 있게 한다.
-    if (!IsValidName(name)) {
+    if (length == 0 || !validName) {
         result.result = LOGIN_INVALID_NAME;
         SendPacket(session->sessionId, &result);
         return;
@@ -194,10 +266,7 @@ void GameServer::HandleJoinRoom(GameSession* session, const C2S_JoinRoom& packet
 
     // 방 안 사람에게는 방 정보를, 로비에 남은 사람에게는 바뀐 방 목록을 보낸다.
     rooms[packet.room_id].SendRoomInfo();
-
-    S2C_RoomList roomList{};
-    BuildRoomList(&roomList);
-    SendToLobby(&roomList);
+    SendRoomList(INVALID_ID);
 }
 
 void GameServer::LeaveRoomInternal(GameSession* session)
@@ -213,43 +282,7 @@ void GameServer::LeaveRoomInternal(GameSession* session)
     session->slot = INVALID_ID;
 
     room.SendRoomInfo();
-
-    S2C_RoomList roomList{};
-    BuildRoomList(&roomList);
-    SendToLobby(&roomList);
-}
-
-void GameServer::HandleSelectCharacter(GameSession* session, const C2S_SelectCharacter& packet)
-{
-    if (session->roomId == INVALID_ID)
-        return;
-    if (packet.character != CHAR_STEVE && packet.character != CHAR_ALEX)
-        return;
-
-    Room& room = rooms[session->roomId];
-    if (room.state != ROOM_WAITING)
-        return;
-
-    room.SelectCharacter(session->slot, packet.character);
-    room.SendRoomInfo();
-}
-
-void GameServer::HandleGameStart(GameSession* session, const C2S_GameStart&)
-{
-    if (session->roomId == INVALID_ID)
-        return;
-
-    Room& room = rooms[session->roomId];
-    if (room.StartGame(GetTickCount64()))
-        return;
-
-    S2C_GameStartResult fail{};
-    fail.size = sizeof(fail);
-    fail.type = S2C_GAME_START_RESULT;
-    fail.success = false;
-    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i)
-        fail.character[i] = CHAR_NONE;
-    SendPacket(session->sessionId, &fail);
+    SendRoomList(INVALID_ID);
 }
 
 void GameServer::SendPacket(int sessionId, const void* packet, bool closeAfterSend)
@@ -267,51 +300,25 @@ void GameServer::SendPacket(int sessionId, const void* packet, bool closeAfterSe
     server.sendQueue->Enqueue(request, closeAfterSend);
 }
 
-void GameServer::BuildRoomList(S2C_RoomList* out)
-{
-    out->size = sizeof(S2C_RoomList);
-    out->type = S2C_ROOM_LIST;
-    out->room_count = MAX_ROOMS;
-    for (int i = 0; i < MAX_ROOMS; ++i) {
-        out->rooms[i].room_id = rooms[i].roomId;
-        out->rooms[i].player_count = static_cast<unsigned char>(rooms[i].GetPlayerCount());
-        out->rooms[i].state = rooms[i].state;
-    }
-}
-
 void GameServer::SendRoomList(int sessionId)
 {
     S2C_RoomList roomList{};
-    BuildRoomList(&roomList);
-    SendPacket(sessionId, &roomList);
-}
-
-void GameServer::HandleMove(GameSession* session, const C2S_Move& packet)
-{
-    if (session->roomId == INVALID_ID)
-        return;
-
-    rooms[session->roomId].SetMoveKeys(session->slot, packet.move_keys);
-}
-
-DWORD GameServer::ThreadMain()
-{
-    ULONGLONG lastTick = GetTickCount64();
-
-    while (WaitForSingleObject(server.stopEvent, 1) == WAIT_TIMEOUT) {
-        ProcessRecvEvents();
-
-        const ULONGLONG now = GetTickCount64();
-        if (now - lastTick < TICK_MS)
-            continue;
-
-        const float dt = static_cast<float>(now - lastTick) / 1000.0f;
-        lastTick = now;
-
-        for (Room& room : rooms) {
-            if (room.state == ROOM_PLAYING)
-                room.UpdateCharacters(now, dt);
-        }
+    roomList.size = sizeof(S2C_RoomList);
+    roomList.type = S2C_ROOM_LIST;
+    roomList.room_count = MAX_ROOMS;
+    for (int i = 0; i < MAX_ROOMS; ++i) {
+        roomList.rooms[i].room_id = rooms[i].roomId;
+        roomList.rooms[i].player_count = static_cast<unsigned char>(rooms[i].GetPlayerCount());
+        roomList.rooms[i].state = rooms[i].state;
     }
-    return 0;
+
+    if (sessionId != INVALID_ID) {
+        SendPacket(sessionId, &roomList);
+        return;
+    }
+
+    for (GameSession& session : sessions) {
+        if (session.inUse && session.loggedIn && session.roomId == INVALID_ID)
+            SendPacket(session.sessionId, &roomList);
+    }
 }
