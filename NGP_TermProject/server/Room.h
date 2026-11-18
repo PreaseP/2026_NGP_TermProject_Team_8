@@ -64,4 +64,10 @@ public:
     void StartCharge(int slot, ULONGLONG now); // 눈덩이 차징 시작
     void ThrowSnowball(int slot, ULONGLONG now); // 차징에 따라 눈덩이 던지기
     int AllocSnowballId();
+    void UpdateSnowballs(ULONGLONG now, float dt); // 눈덩이 이동·충돌·만료 처리
+    static bool CheckSnowballHit(const Snowball& snowball, const PlayerState& player); // 눈덩이 피격 판정
+    void ApplyHit(int target, bool powered, ULONGLONG now); // 방어막과 피해 처리
+    void RemoveSnowball(Snowball& snowball); // 눈덩이 제거 및 통지 (김동관 구현 예정)
+    void AddSnowWall(int gx, int gz); // 눈 벽 쌓기 (김동관 구현 예정)
+    void EndGame(int winnerSlot, END_REASON reason, ULONGLONG now); // 경기 종료 (김동관 구현 예정)
 };
