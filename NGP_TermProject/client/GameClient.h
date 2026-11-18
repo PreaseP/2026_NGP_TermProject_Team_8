@@ -13,6 +13,9 @@ struct ClientObject {
     OBJECT_TYPE type = OBJ_CHARACTER;
     CHARACTER_TYPE character = CHAR_NONE;
     glm::vec3 renderPos{0.0f};
+    glm::vec3 prevPos{0.0f};
+    glm::vec3 targetPos{0.0f};
+    float lerpT = 1.0f;
 };
 
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
@@ -82,8 +85,10 @@ private:
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
     void ProcessPacket(const unsigned char* packet);
     void ApplyWorldPacket(const unsigned char* packet);
+    void UpdateVisuals(float dt); // [11.18] 보간
 
     CLIENT_STATE currentState = CLIENT_LOGIN;
+    ULONGLONG lastTickMs = 0;
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
