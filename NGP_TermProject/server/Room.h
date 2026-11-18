@@ -54,6 +54,7 @@ public:
     int GetPlayerCount() const; // 방 인원수 확인
     void SendRoomInfo() const; // 방 정보 전송
     bool StartGame(ULONGLONG now); // 시작 조건 확인 후 경기 시작
+    void EndGame(int winnerSlot, END_REASON reason, ULONGLONG now);
     void ResetWorld(); // 눈덩이와 눈 벽 초기화
     void Broadcast(const void* packet) const; // 방 참가자 전원에게 패킷 전송
     void SendStatusChange(int objectId, STATUS_TYPE type, float value) const; // 오브젝트 상태 변경 전송

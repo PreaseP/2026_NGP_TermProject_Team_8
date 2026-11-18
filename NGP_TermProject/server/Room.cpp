@@ -64,6 +64,15 @@ bool Room::StartGame(ULONGLONG now)
     return true;
 }
 
+void Room::EndGame(int, END_REASON, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING)
+        return;
+
+    state = ROOM_RESULT;
+    resultEndMS = now + RESULT_DURATION_MS;
+}
+
 void Room::ResetWorld()
 {
     for (Snowball& snowball : snowballs)
