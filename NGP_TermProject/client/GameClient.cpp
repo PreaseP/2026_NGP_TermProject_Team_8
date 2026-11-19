@@ -361,6 +361,7 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
         player.prevPos = player.renderPos;
         player.targetPos = player.renderPos;
         player.lerpT = 1.0f;
+        player.armState = ARM_IDLE;
         objects[slot] = player;
         hp[slot] = MAX_HP;
     }
@@ -372,6 +373,21 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 
 void GameClient::ApplyWorldPacket(const unsigned char* packet)
 {
+    if (packet[1] == S2C_STATUS_CHANGE) {
+        S2C_StatusChange state{};
+        std::memcpy(&state, packet, sizeof(state));
+        if (state.status != STATUS_ARM_STATE) return;
+        if (state.object_id < 0 ||
+            (state.value != ARM_IDLE && state.value != ARM_RUN &&
+             state.value != ARM_CHARGE && state.value != ARM_THROW)) {
+            HandleDisconnect();
+            return;
+        }
+        const auto found = objects.find(state.object_id);
+        if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
+        found->second.armState = static_cast<ARM_STATE>(state.value);
+        return;
+    }
     if (packet[1] != S2C_MOVE_OBJECT) return;
     S2C_MoveObject movement{};
     std::memcpy(&movement, packet, sizeof(movement));
@@ -472,7 +488,8 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         HandleGameStartResult(result);
         return;
     }
-    if (currentState == CLIENT_PLAYING && packet[1] == S2C_MOVE_OBJECT) {
+    if (currentState == CLIENT_PLAYING &&
+        (packet[1] == S2C_MOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
         ApplyWorldPacket(packet);
         return;
     }

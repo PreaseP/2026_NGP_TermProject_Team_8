@@ -962,10 +962,14 @@ GLvoid Drawscene()
             gameMap.initialize();
             for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
                 const ClientObject* player = gameClient.GetObject(slot);
-                if (player->character == CHAR_STEVE)
+                if (player->character == CHAR_STEVE) {
                     matchSteve[slot] = new Steve::Character("steve.png");
-                else
+                    matchSteve[slot]->pos = player->renderPos;
+                }
+                else {
                     matchAlex[slot] = new Alex::Character("alex.png");
+                    matchAlex[slot]->pos = player->renderPos;
+                }
             }
             matchSceneInitialized = true;
         }
@@ -1165,12 +1169,53 @@ void checkAlexMoving()
 	if (!moving && alex) alex->changeState(1, 0);
 }
 
+template<class CharacterType>
+void UpdateMatchCharacter(CharacterType* character, const ClientObject& player, float dt)
+{
+    if (!character) return;
+    const bool isMoving = character->pos.x != player.renderPos.x ||
+        character->pos.z != player.renderPos.z;
+    character->pos = player.renderPos;
+    if (character->armState != player.armState) {
+        switch (player.armState) {
+        case ARM_CHARGE:
+            character->enterCharge();
+            break;
+        case ARM_THROW:
+            if (character->armAngle >= 0.0f) character->armAngle = -glm::radians(90.0f);
+            character->enterThrow();
+            break;
+        default:
+            character->changeState(0, player.armState);
+            break;
+        }
+    }
+    if (player.armState == ARM_CHARGE) {
+        character->armAngle = std::max(-glm::radians(180.0f),
+            character->armAngle - glm::radians(180.0f) * dt / maxChargeTime);
+    }
+    character->changeState(1, isMoving ? 1 : 0);
+    character->updateAnimation(dt, isMoving, true);
+}
+
 void TimerFunction(int value)
 {
 	// [11.6] 타이틀 화면에서도 통신을 처리하도록 화면 검사 전에 호출한다.
 	gameClient.Tick();
 
-	if (currentGameState == GameState::TITLE_SCREEN) {
+    const int now = glutGet(GLUT_ELAPSED_TIME);
+    static int lastAnimationMs = now;
+    const float animationDt = std::min(static_cast<float>(now - lastAnimationMs) / 1000.0f, 0.05f);
+    lastAnimationMs = now;
+    if (gameClient.GetState() == CLIENT_PLAYING && matchSceneInitialized) {
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject& player = *gameClient.GetObject(slot);
+            UpdateMatchCharacter(matchSteve[slot], player, animationDt);
+            UpdateMatchCharacter(matchAlex[slot], player, animationDt);
+        }
+    }
+
+	if (gameClient.GetState() == CLIENT_PLAYING || currentGameState == GameState::TITLE_SCREEN) {
 		glutPostRedisplay();
 		glutTimerFunc(16, TimerFunction, 1);
 		return;

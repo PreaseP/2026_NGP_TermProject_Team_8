@@ -16,6 +16,7 @@ struct ClientObject {
     glm::vec3 prevPos{0.0f};
     glm::vec3 targetPos{0.0f};
     float lerpT = 1.0f;
+    ARM_STATE armState = ARM_IDLE;
 };
 
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
