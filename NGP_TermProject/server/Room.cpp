@@ -197,12 +197,12 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
             const glm::vec3 before = player.pos;
 
             glm::vec3 next = player.pos;
-            next.x = std::clamp(player.pos.x + dx, halfX, MAP_WIDTH * BLOCK_SIZE - halfX);
+            next.x = std::clamp(player.pos.x + dx, PLAY_MIN_X + halfX, PLAY_MAX_X - halfX);
             if (!IsBlockedByWall(next, stats.bbox))
                 player.pos.x = next.x;
 
             next = player.pos;
-            next.z = std::clamp(player.pos.z + dz, halfZ, MAP_DEPTH * BLOCK_SIZE - halfZ);
+            next.z = std::clamp(player.pos.z + dz, PLAY_MIN_Z[slot] + halfZ, PLAY_MAX_Z[slot] - halfZ);
             if (!IsBlockedByWall(next, stats.bbox))
                 player.pos.z = next.z;
 
@@ -385,7 +385,14 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
         }
 
         const bool hitWall = wallHeight[gx][gz] > 0.0f && snowball.pos.y <= GROUND_TOP + wallHeight[gx][gz];
-        const bool hitGround = snowball.pos.y <= GROUND_TOP;
+        const bool onGround = (snowball.pos.z >= PLAY_MIN_Z[0] && snowball.pos.z <= PLAY_MAX_Z[0])
+            || (snowball.pos.z >= PLAY_MIN_Z[1] && snowball.pos.z <= PLAY_MAX_Z[1]);
+        if (!onGround && snowball.pos.y < 0.0f) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
+        const bool hitGround = onGround && snowball.pos.y <= GROUND_TOP;
         if (hitWall || hitGround) {
             RemoveSnowball(snowball);
             AddSnowWall(gx, gz);

@@ -33,6 +33,11 @@ const glm::vec3 SPAWN_POS[MAX_ROOM_PLAYERS] = {
     {5.0f, GROUND_TOP, 2.0f}, {5.0f, GROUND_TOP, 13.0f}
 };
 const float FORWARD_Z[MAX_ROOM_PLAYERS] = { +1.0f, -1.0f };
+constexpr float PLAY_MIN_X = -0.5f;
+constexpr float PLAY_MAX_X = 9.5f;
+constexpr float PLAY_MIN_Z[MAX_ROOM_PLAYERS] = { -0.5f, 9.5f };
+constexpr float PLAY_MAX_Z[MAX_ROOM_PLAYERS] = { 4.5f, 14.5f };
+constexpr float MAX_DT = 0.1f;
 
 class GameServer;
 

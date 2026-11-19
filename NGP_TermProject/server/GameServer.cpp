@@ -1,4 +1,7 @@
 ﻿#include "GameServer.h"
+#include <timeapi.h>
+
+#pragma comment(lib, "winmm.lib")
 
 DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
 {
@@ -6,6 +9,7 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
     if (gameServer == nullptr)
         return 1;
 
+    timeBeginPeriod(1);
     ULONGLONG lastTick = GetTickCount64();
 
     while (WaitForSingleObject(gameServer->server.stopEvent, 1) == WAIT_TIMEOUT) {
@@ -15,7 +19,9 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
         if (now - lastTick < TICK_MS)
             continue;
 
-        const float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        if (dt > MAX_DT)
+            dt = MAX_DT;
         lastTick = now;
 
         for (Room& room : gameServer->rooms) {
@@ -26,6 +32,7 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
             room.UpdateSnowballs(now, dt);
         }
     }
+    timeEndPeriod(1);
     return 0;
 }
 
