@@ -5,6 +5,9 @@
 #include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
 #include <Windows.h>
 
+// [11.20] 서버의 발 높이를 모델과 카메라의 기준 높이로 맞춘다.
+constexpr float CHARACTER_RENDER_OFFSET_Y = 1.0f;
+
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
 bool GameClient::Init(const char* ip)
 {
@@ -357,7 +360,7 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
         player.objectId = slot;
         player.type = OBJ_CHARACTER;
         player.character = result.character[slot];
-        player.renderPos = glm::vec3(result.x[slot], result.y[slot], result.z[slot]);
+        player.renderPos = glm::vec3(result.x[slot], result.y[slot] + CHARACTER_RENDER_OFFSET_Y, result.z[slot]);
         player.prevPos = player.renderPos;
         player.targetPos = player.renderPos;
         player.lerpT = 1.0f;
@@ -399,7 +402,7 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     const auto found = objects.find(movement.object_id);
     if (found == objects.end()) return;
     found->second.prevPos = found->second.renderPos;
-    found->second.targetPos = glm::vec3(movement.x, movement.y, movement.z);
+    found->second.targetPos = glm::vec3(movement.x, movement.y + CHARACTER_RENDER_OFFSET_Y, movement.z);
     found->second.lerpT = 0.0f;
 }
 
