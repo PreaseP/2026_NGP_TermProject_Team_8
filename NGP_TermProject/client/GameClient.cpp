@@ -3,6 +3,10 @@
 #include <cstddef>
 #include <cmath>
 #include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
+#include <Windows.h>
+
+// [11.20] 서버의 발 높이를 모델과 카메라의 기준 높이로 맞춘다.
+constexpr float CHARACTER_RENDER_OFFSET_Y = 1.0f;
 
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
 bool GameClient::Init(const char* ip)
@@ -27,6 +31,7 @@ bool GameClient::Init(const char* ip)
     }
 
     inputHandler.SetServerAddress(serverIp.c_str());
+    lastTickMs = GetTickCount64();
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
@@ -128,8 +133,13 @@ void GameClient::HandleDisconnect()
 // [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
 void GameClient::Tick()
 {
+    const ULONGLONG now = GetTickCount64();
+    const float dt = static_cast<float>(now - lastTickMs) / 1000.0f;
+    lastTickMs = now;
+
     inputHandler.ProcessInput();
     PollNetwork();
+    UpdateVisuals(dt);
 }
 
 // [11.6] 로그인 성공 여부는 이후 서버 응답으로 확인한다.
@@ -350,7 +360,11 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
         player.objectId = slot;
         player.type = OBJ_CHARACTER;
         player.character = result.character[slot];
-        player.renderPos = glm::vec3(result.x[slot], result.y[slot], result.z[slot]);
+        player.renderPos = glm::vec3(result.x[slot], result.y[slot] + CHARACTER_RENDER_OFFSET_Y, result.z[slot]);
+        player.prevPos = player.renderPos;
+        player.targetPos = player.renderPos;
+        player.lerpT = 1.0f;
+        player.armState = ARM_IDLE;
         objects[slot] = player;
         hp[slot] = MAX_HP;
     }
@@ -362,6 +376,21 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 
 void GameClient::ApplyWorldPacket(const unsigned char* packet)
 {
+    if (packet[1] == S2C_STATUS_CHANGE) {
+        S2C_StatusChange state{};
+        std::memcpy(&state, packet, sizeof(state));
+        if (state.status != STATUS_ARM_STATE) return;
+        if (state.object_id < 0 ||
+            (state.value != ARM_IDLE && state.value != ARM_RUN &&
+             state.value != ARM_CHARGE && state.value != ARM_THROW)) {
+            HandleDisconnect();
+            return;
+        }
+        const auto found = objects.find(state.object_id);
+        if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
+        found->second.armState = static_cast<ARM_STATE>(state.value);
+        return;
+    }
     if (packet[1] != S2C_MOVE_OBJECT) return;
     S2C_MoveObject movement{};
     std::memcpy(&movement, packet, sizeof(movement));
@@ -372,7 +401,21 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     }
     const auto found = objects.find(movement.object_id);
     if (found == objects.end()) return;
-    found->second.renderPos = glm::vec3(movement.x, movement.y, movement.z);
+    found->second.prevPos = found->second.renderPos;
+    found->second.targetPos = glm::vec3(movement.x, movement.y + CHARACTER_RENDER_OFFSET_Y, movement.z);
+    found->second.lerpT = 0.0f;
+}
+
+void GameClient::UpdateVisuals(float dt)
+{
+    if (currentState != CLIENT_PLAYING) return;
+    constexpr float moveDuration = 0.033f;
+    for (auto& entry : objects) {
+        ClientObject& object = entry.second;
+        if (object.lerpT >= 1.0f) continue;
+        object.lerpT = glm::min(object.lerpT + dt / moveDuration, 1.0f);
+        object.renderPos = glm::mix(object.prevPos, object.targetPos, object.lerpT); //glm::mix(출발점, 목표점, 진행도)는 두 위치 사이에서 진행도에 해당하는 위치를 계산
+    }
 }
 
 // [11.5]패킷 검사와 종류 구분
@@ -448,7 +491,8 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         HandleGameStartResult(result);
         return;
     }
-    if (currentState == CLIENT_PLAYING && packet[1] == S2C_MOVE_OBJECT) {
+    if (currentState == CLIENT_PLAYING &&
+        (packet[1] == S2C_MOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
         ApplyWorldPacket(packet);
         return;
     }

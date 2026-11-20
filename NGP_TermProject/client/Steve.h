@@ -206,11 +206,16 @@ namespace Steve {
 				pos.z = nextPos.z;
 			}
 
+			updateAnimation(0.016f, isMoving);
+		}
+
+		void updateAnimation(float dt, bool isMoving, bool serverControlled = false) {
+			const float frameScale = dt / 0.016f;
 			switch (armState) {
 			case 0: // IDLE
 				break;
 			case 1: // RUN
-				armAngle += armDir * 0.05f;
+				armAngle += armDir * 0.05f * frameScale;
 				if (armAngle > glm::radians(60.0f) || armAngle < glm::radians(-60.0f))
 					armDir = -armDir;
 				break;
@@ -219,11 +224,13 @@ namespace Steve {
 			case 3: // LOWERING
 			{
 				const float lowerSpeed = 0.25f;
-				armAngle += lowerSpeed;
+				armAngle += lowerSpeed * frameScale;
 				if (armAngle >= 0.0f) {
 					armAngle = 0.0f;
-					if (isMoving) changeState(0, 1);
-					else changeState(0, 0);
+					if (!serverControlled) {
+						if (isMoving) changeState(0, 1);
+						else changeState(0, 0);
+					}
 				}
 			}
 			break;
@@ -233,7 +240,7 @@ namespace Steve {
 			case 0: // IDLE
 				break;
 			case 1: // RUN
-				legAngle += legDir * 0.05f;
+				legAngle += legDir * 0.05f * frameScale;
 				if (legAngle > glm::radians(60.0f) || legAngle < glm::radians(-60.0f))
 					legDir = -legDir;
 				break;
