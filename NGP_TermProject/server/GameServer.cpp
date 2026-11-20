@@ -1,4 +1,7 @@
 ﻿#include "GameServer.h"
+#include <timeapi.h>
+
+#pragma comment(lib, "winmm.lib")
 
 DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
 {
@@ -6,6 +9,7 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
     if (gameServer == nullptr)
         return 1;
 
+    timeBeginPeriod(1);
     ULONGLONG lastTick = GetTickCount64();
 
     while (WaitForSingleObject(gameServer->server.stopEvent, 1) == WAIT_TIMEOUT) {
@@ -15,14 +19,20 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
         if (now - lastTick < TICK_MS)
             continue;
 
-        const float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        float dt = static_cast<float>(now - lastTick) / 1000.0f;
+        if (dt > MAX_DT)
+            dt = MAX_DT;
         lastTick = now;
 
         for (Room& room : gameServer->rooms) {
-            if (room.state == ROOM_PLAYING)
-                room.UpdateCharacters(now, dt);
+            if (room.state != ROOM_PLAYING)
+                continue;
+
+            room.UpdateCharacters(now, dt);
+            room.UpdateSnowballs(now, dt);
         }
     }
+    timeEndPeriod(1);
     return 0;
 }
 
@@ -160,6 +170,14 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         room.players[session->slot].moveKeys = packet.move_keys & MOVE_KEY_MASK;
         break;
     }
+    case C2S_CHARGE_START:
+        if (session->roomId != INVALID_ID)
+            rooms[session->roomId].StartCharge(session->slot, GetTickCount64());
+        break;
+    case C2S_THROW:
+        if (session->roomId != INVALID_ID)
+            rooms[session->roomId].ThrowSnowball(session->slot, GetTickCount64());
+        break;
     case C2S_GAME_START: {
         if (session->roomId == INVALID_ID)
             break;
