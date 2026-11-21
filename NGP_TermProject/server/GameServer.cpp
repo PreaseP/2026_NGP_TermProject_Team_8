@@ -24,13 +24,8 @@ DWORD WINAPI GameServer::ThreadEntry(LPVOID param)
             dt = MAX_DT;
         lastTick = now;
 
-        for (Room& room : gameServer->rooms) {
-            if (room.state != ROOM_PLAYING)
-                continue;
-
-            room.UpdateCharacters(now, dt);
-            room.UpdateSnowballs(now, dt);
-        }
+        for (Room& room : gameServer->rooms)
+            room.Update(now, dt);
     }
     timeEndPeriod(1);
     return 0;

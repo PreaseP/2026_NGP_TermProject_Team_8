@@ -402,3 +402,35 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
         SendMoveObject(snowball.objectId, snowball.pos);
     }
 }
+
+void Room::ReturnToWaiting()
+{
+    state = ROOM_WAITING;
+    resultEndMS = 0;
+    nextItemMs = 0;
+    ResetWorld();
+
+    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
+        players[i] = PlayerState{};
+        selectedCharacters[i] = CHAR_NONE;
+    }
+
+    SendRoomInfo();
+    server->SendRoomList(INVALID_ID);
+}
+
+void Room::Update(ULONGLONG now, float dt)
+{
+    switch (state) {
+    case ROOM_PLAYING:
+        UpdateCharacters(now, dt);
+        UpdateSnowballs(now, dt);
+        break;
+    case ROOM_RESULT:
+        if (now >= resultEndMS)
+            ReturnToWaiting();
+        break;
+    default:
+        break;
+    }
+}

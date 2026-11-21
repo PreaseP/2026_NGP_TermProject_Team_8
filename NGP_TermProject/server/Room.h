@@ -65,6 +65,8 @@ public:
     void SendMoveObject(int objectId, const glm::vec3& pos) const; // 오브젝트 이동 좌표 전송
     static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
+    void Update(ULONGLONG now, float dt); // 경기 갱신 및 대기실 복귀
+    void ReturnToWaiting();
     void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
     void StartCharge(int slot, ULONGLONG now); // 눈덩이 차징 시작
     void ThrowSnowball(int slot, ULONGLONG now); // 차징에 따라 눈덩이 던지기
