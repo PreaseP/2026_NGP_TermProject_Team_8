@@ -1,6 +1,7 @@
 #include "Room.h"
 #include <cmath>
 #include <algorithm>
+#include <random>
 #include "GameServer.h"
 
 void Room::Init(int id, GameServer* owner)
@@ -64,13 +65,21 @@ bool Room::StartGame(ULONGLONG now)
     return true;
 }
 
-void Room::EndGame(int, END_REASON, ULONGLONG now)
+void Room::EndGame(int winnerSlot, END_REASON reason, ULONGLONG now)
 {
     if (state != ROOM_PLAYING)
         return;
 
     state = ROOM_RESULT;
     resultEndMS = now + RESULT_DURATION_MS;
+
+    S2C_GameOver result{};
+    result.size = sizeof(result);
+    result.type = S2C_GAME_OVER;
+    result.winner_slot = static_cast<unsigned char>(winnerSlot);
+    result.reason = reason;
+    Broadcast(&result);
+    server->SendRoomList(INVALID_ID);
 }
 
 void Room::ResetWorld()
@@ -232,4 +241,27 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
             SendStatusChange(slot, STATUS_ARM_STATE, static_cast<float>(nextArm));
         }
     }
+}
+
+void Room::GiveRandomItem(int slot)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+    if (playerSessionIds[slot] == INVALID_ID)
+        return;
+
+    PlayerState& player = players[slot];
+    if (player.itemCount >= MAX_ITEMS)
+        return;
+
+    static std::mt19937 randomEngine(std::random_device{}());
+    std::uniform_int_distribution<int> itemDistribution(0, 1);
+    const ITEM_TYPE item = (itemDistribution(randomEngine) == 0) ? ITEM_SHIELD : ITEM_POWER_UP;
+    player.items[player.itemCount++] = item;
+
+    S2C_ItemGet packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ITEM_GET;
+    packet.item = item;
+    server->SendPacket(playerSessionIds[slot], &packet);
 }
