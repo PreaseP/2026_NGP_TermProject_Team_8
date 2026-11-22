@@ -76,6 +76,8 @@ static GameClient gameClient;
 
 static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
 static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
+// [11.23] 모든 네트워크 눈덩이는 같은 구 모양으로 그린다.
+static Snowball* matchSnowball = nullptr;
 static bool matchSceneInitialized = false;
 
 template<class CharacterType>
@@ -99,6 +101,9 @@ void ClearMatchScene() {
         ReleaseCharacter(matchSteve[slot]);
         ReleaseCharacter(matchAlex[slot]);
     }
+    // [11.23] 경기 화면을 정리할 때 눈덩이의 그래픽 자원도 비운다.
+    delete matchSnowball;
+    matchSnowball = nullptr;
     matchSceneInitialized = false;
 }
 
@@ -975,6 +980,9 @@ GLvoid Drawscene()
                     matchAlex[slot]->pos = player->renderPos;
                 }
             }
+            // [11.23] 그리기에 쓸 눈덩이 모양을 경기 시작 때 한 번 준비한다.
+            matchSnowball = new Snowball(glm::vec3(0.0f),
+                glm::vec3(0.0f, 0.0f, 1.0f), 0.0f, 0.15f);
             matchSceneInitialized = true;
         }
         const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
@@ -1095,6 +1103,13 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
                 matchAlex[slot]->pos = player->renderPos;
                 if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
             }
+        }
+        // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
+        for (const auto& entry : gameClient.GetObjects()) {
+            const ClientObject& object = entry.second;
+            if (object.type != OBJ_SNOWBALL) continue;
+            matchSnowball->setPosition(object.renderPos);
+            matchSnowball->render(shaderProgramID);
         }
         return;
     }

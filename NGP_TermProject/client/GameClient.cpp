@@ -392,6 +392,39 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 
 void GameClient::ApplyWorldPacket(const unsigned char* packet)
 {
+    // [11.23] 생성 패킷을 읽고 눈덩이에 필요한 값을 확인한다.
+    if (packet[1] == S2C_ADD_OBJECT) {
+        S2C_AddObject added{};
+        std::memcpy(&added, packet, sizeof(added));
+        // [11.23] 눈 벽 생성은 해당 일정에서 연결한다.
+        if (added.obj_type == OBJ_SNOW_WALL) return;
+
+        // [11.23] 강화 여부는 bool로 사용하기 전에 0 또는 1인지 확인한다.
+        const unsigned char poweredValue = packet[offsetof(S2C_AddObject, powered)];
+        if (added.obj_type != OBJ_SNOWBALL ||
+            added.object_id < OBJ_ID_SNOWBALL_START ||
+            added.object_id >= OBJ_ID_SNOW_WALL_START ||
+            added.owner_slot >= MAX_ROOM_PLAYERS ||
+            !std::isfinite(added.x) || !std::isfinite(added.y) || !std::isfinite(added.z) ||
+            poweredValue > 1) {
+            HandleDisconnect();
+            return;
+        }
+        // [11.23] 서버가 알려 준 눈덩이 정보를 저장한다.
+        ClientObject snowball{};
+        snowball.objectId = added.object_id;
+        snowball.type = OBJ_SNOWBALL;
+        snowball.ownerSlot = added.owner_slot;
+        snowball.powered = added.powered;
+        // [11.23] 처음에는 세 위치를 생성 위치로 맞춰 바로 놓는다.
+        snowball.renderPos = glm::vec3(added.x, added.y, added.z);
+        snowball.prevPos = snowball.renderPos;
+        snowball.targetPos = snowball.renderPos;
+        snowball.lerpT = 1.0f;
+        objects[snowball.objectId] = snowball;
+        return;
+    }
+
     if (packet[1] == S2C_STATUS_CHANGE) {
         S2C_StatusChange state{};
         std::memcpy(&state, packet, sizeof(state));
@@ -416,7 +449,8 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
         return;
     }
     const auto found = objects.find(movement.object_id);
-    if (found == objects.end()) return;
+    // [11.23] 현재 이동 보정은 캐릭터에만 적용한다.
+    if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
     found->second.prevPos = found->second.renderPos;
     found->second.targetPos = glm::vec3(movement.x, movement.y + CHARACTER_RENDER_OFFSET_Y, movement.z);
     found->second.lerpT = 0.0f;
@@ -507,8 +541,10 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         HandleGameStartResult(result);
         return;
     }
+    // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.
     if (currentState == CLIENT_PLAYING &&
-        (packet[1] == S2C_MOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
+        (packet[1] == S2C_ADD_OBJECT || packet[1] == S2C_MOVE_OBJECT ||
+         packet[1] == S2C_STATUS_CHANGE)) {
         ApplyWorldPacket(packet);
         return;
     }

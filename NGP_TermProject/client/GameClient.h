@@ -12,6 +12,8 @@ struct ClientObject {
     int objectId = -1;
     OBJECT_TYPE type = OBJ_CHARACTER;
     CHARACTER_TYPE character = CHAR_NONE;
+    unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
+    bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
     glm::vec3 renderPos{0.0f};
     glm::vec3 prevPos{0.0f};
     glm::vec3 targetPos{0.0f};
@@ -38,6 +40,8 @@ public:
         const auto found = objects.find(objectId);
         return found != objects.end() ? &found->second : nullptr;
     }
+    // [11.23] 화면에서 물체 목록을 읽기만 할 수 있게 한다.
+    const std::unordered_map<int, ClientObject>& GetObjects() const { return objects; }
     int GetHP(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
         return hp[slot];
