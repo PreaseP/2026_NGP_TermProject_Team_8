@@ -1,6 +1,7 @@
 #include "Room.h"
 #include <cmath>
 #include <algorithm>
+#include <random>
 #include "GameServer.h"
 
 void Room::Init(int id, GameServer* owner)
@@ -62,6 +63,23 @@ bool Room::StartGame(ULONGLONG now)
 
     Broadcast(&result);
     return true;
+}
+
+void Room::EndGame(int winnerSlot, END_REASON reason, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING)
+        return;
+
+    state = ROOM_RESULT;
+    resultEndMS = now + RESULT_DURATION_MS;
+
+    S2C_GameOver result{};
+    result.size = sizeof(result);
+    result.type = S2C_GAME_OVER;
+    result.winner_slot = static_cast<unsigned char>(winnerSlot);
+    result.reason = reason;
+    Broadcast(&result);
+    server->SendRoomList(INVALID_ID);
 }
 
 void Room::ResetWorld()
@@ -378,8 +396,14 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
             continue;
         }
 
+        if (snowball.pos.x < PLAY_MIN_X || snowball.pos.x > PLAY_MAX_X
+            || snowball.pos.z < PLAY_MIN_Z[0] || snowball.pos.z > PLAY_MAX_Z[1]) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
         int gx, gz;
-        if (!WorldToGrid(snowball.pos.x, snowball.pos.z, &gx, &gz)) {
+        if (!WorldToGrid((std::max)(snowball.pos.x, 0.0f), (std::max)(snowball.pos.z, 0.0f), &gx, &gz)) {
             RemoveSnowball(snowball);
             continue;
         }
@@ -433,4 +457,73 @@ void Room::Update(ULONGLONG now, float dt)
     default:
         break;
     }
+}
+
+void Room::GiveRandomItem(int slot)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+    if (playerSessionIds[slot] == INVALID_ID)
+        return;
+
+    PlayerState& player = players[slot];
+    if (player.itemCount >= MAX_ITEMS)
+        return;
+
+    static std::mt19937 randomEngine(std::random_device{}());
+    std::uniform_int_distribution<int> itemDistribution(0, 1);
+    const ITEM_TYPE item = (itemDistribution(randomEngine) == 0) ? ITEM_SHIELD : ITEM_POWER_UP;
+    player.items[player.itemCount++] = item;
+
+    S2C_ItemGet packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ITEM_GET;
+    packet.item = item;
+    server->SendPacket(playerSessionIds[slot], &packet);
+}
+
+void Room::RemoveSnowball(Snowball& snowball)
+{
+    if (!snowball.active)
+        return;
+
+    snowball.active = false;
+
+    S2C_RemoveObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_REMOVE_OBJECT;
+    packet.object_id = snowball.objectId;
+    Broadcast(&packet);
+}
+
+void Room::AddSnowWall(int gx, int gz)
+{
+    if (gx < 0 || gx >= MAP_WIDTH || gz < 0 || gz >= MAP_DEPTH)
+        return;
+
+    float& height = wallHeight[gx][gz];
+    if (height >= WALL_MAX_HEIGHT)
+        return;
+
+    const bool isNewWall = height == 0.0f;
+    height = (std::min)(height + WALL_STEP, WALL_MAX_HEIGHT);
+    const int objectId = OBJ_ID_SNOW_WALL_START + gx * 100 + gz;
+
+    if (!isNewWall) {
+        SendStatusChange(objectId, STATUS_WALL_HEIGHT, height);
+        return;
+    }
+
+    S2C_AddObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ADD_OBJECT;
+    packet.object_id = objectId;
+    packet.obj_type = OBJ_SNOW_WALL;
+    packet.owner_slot = 0xFF;
+    // [11.22] 클라이언트가 눈 벽을 그리는 좌표에 맞춘다.
+    packet.x = gx * BLOCK_SIZE;
+    packet.y = GROUND_TOP + height / 2.0f;
+    packet.z = gz * BLOCK_SIZE;
+    packet.height = height;
+    Broadcast(&packet);
 }
