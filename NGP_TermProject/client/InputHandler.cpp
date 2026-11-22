@@ -1,6 +1,7 @@
 ﻿#include "InputHandler.h"
 
 #include "GameClient.h" // [11.6] 현재 상태 확인과 로그인 요청에 사용한다.
+#include <gl/freeglut.h>
 #include <cstring>
 
 namespace {
@@ -107,6 +108,30 @@ void InputHandler::OnKeyUp(unsigned char key)
 {
     if (game == nullptr || game->GetState() != CLIENT_PLAYING) return;
     moveKeys = static_cast<unsigned char>(moveKeys & ~MovementBit(key));
+}
+
+// [11.20] 왼쪽 버튼을 누르면 차징하고, 떼면 던지기를 요청한다.
+void InputHandler::OnMouse(int button, int state)
+{
+    if (game == nullptr || game->GetState() != CLIENT_PLAYING || button != GLUT_LEFT_BUTTON) return;
+
+    if (state == GLUT_DOWN) {
+        if (attackPressed) return; // 이미 차징을 등록했으면 같은 요청을 보내지 않는다.
+
+        C2S_ChargeStart request{};
+        request.type = C2S_CHARGE_START;
+        if (game->QueueRequest(&request, sizeof(request))) {
+            attackPressed = true;
+        }
+        return;
+    }
+
+    if (state != GLUT_UP || !attackPressed) return;
+
+    attackPressed = false; // 버튼을 뗐으므로 다음 클릭을 받을 수 있게 한다.
+    C2S_Throw request{};
+    request.type = C2S_THROW;
+    game->QueueRequest(&request, sizeof(request));
 }
 
 void InputHandler::ProcessInput()

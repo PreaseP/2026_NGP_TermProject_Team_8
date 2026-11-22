@@ -266,6 +266,22 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         break;
     }
 
+    // [11.20] 경기 중에는 정해진 크기의 차징 시작 요청만 받는다.
+    case C2S_CHARGE_START:
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_ChargeStart)) {
+            errorMessage = "Invalid charge start request.";
+            return false;
+        }
+        break;
+
+    // [11.20] 던지기 요청도 경기 상태와 패킷 크기를 확인한다.
+    case C2S_THROW:
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_Throw)) {
+            errorMessage = "Invalid throw request.";
+            return false;
+        }
+        break;
+
     default:
         break;
     }

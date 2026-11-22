@@ -77,6 +77,7 @@ public:
     CLIENT_STATE GetState() const { return currentState; } // [11.6] 입력 처리기가 현재 상태를 확인한다.
     void OnKeyUp(unsigned char key) { inputHandler.OnKeyUp(key); }
     void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
+    void OnMouse(int button, int state) { inputHandler.OnMouse(button, state); } // [11.20] 마우스 입력을 전달한다.
 
 private:
     void HandleDisconnect(); // [11.9] 이전 접속 정보를 비우고 첫 로그인 화면으로 돌아간다.

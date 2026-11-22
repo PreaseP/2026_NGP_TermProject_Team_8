@@ -762,7 +762,11 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void OnMouseButton(int button, int state, int x, int y)
 {
-    if (gameClient.GetState() == CLIENT_PLAYING) return;
+    // [11.20] 경기 중 마우스 입력을 차징과 던지기 처리로 넘긴다.
+    if (gameClient.GetState() == CLIENT_PLAYING) {
+        gameClient.OnMouse(button, state);
+        return;
+    }
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
