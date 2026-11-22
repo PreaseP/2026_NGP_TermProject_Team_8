@@ -173,6 +173,20 @@ void GameServer::OnPacket(int sessionId, const unsigned char* data, int size)
         if (session->roomId != INVALID_ID)
             rooms[session->roomId].ThrowSnowball(session->slot, GetTickCount64());
         break;
+    case C2S_USE_ITEM: {
+        const C2S_UseItem& packet = *reinterpret_cast<const C2S_UseItem*>(data);
+        if (session->roomId == INVALID_ID)
+            break;
+        if (packet.item != ITEM_SHIELD && packet.item != ITEM_POWER_UP)
+            break;
+
+        Room& room = rooms[session->roomId];
+        if (room.state != ROOM_PLAYING)
+            break;
+
+        room.UseItem(session->slot, packet.item);
+        break;
+    }
     case C2S_GAME_START: {
         if (session->roomId == INVALID_ID)
             break;
@@ -307,12 +321,17 @@ void GameServer::LeaveRoomInternal(GameSession* session)
         return;
 
     const int roomId = session->roomId;
+    const int leftSlot = session->slot;
     Room& room = rooms[roomId];
-    room.playerSessionIds[session->slot] = INVALID_ID;
-    room.selectedCharacters[session->slot] = CHAR_NONE;
+    const bool wasPlaying = room.state == ROOM_PLAYING;
+    room.playerSessionIds[leftSlot] = INVALID_ID;
+    room.selectedCharacters[leftSlot] = CHAR_NONE;
 
     session->roomId = INVALID_ID;
     session->slot = INVALID_ID;
+
+    if (wasPlaying)
+        room.EndGame(1 - leftSlot, END_OPPONENT_LEFT, GetTickCount64());
 
     room.SendRoomInfo();
     SendRoomList(INVALID_ID);
