@@ -265,3 +265,49 @@ void Room::GiveRandomItem(int slot)
     packet.item = item;
     server->SendPacket(playerSessionIds[slot], &packet);
 }
+
+void Room::RemoveSnowball(Snowball& snowball)
+{
+    if (!snowball.active)
+        return;
+
+    snowball.active = false;
+
+    S2C_RemoveObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_REMOVE_OBJECT;
+    packet.object_id = snowball.objectId;
+    Broadcast(&packet);
+}
+
+void Room::AddSnowWall(int gx, int gz)
+{
+    if (gx < 0 || gx >= MAP_WIDTH || gz < 0 || gz >= MAP_DEPTH)
+        return;
+
+    float& height = wallHeight[gx][gz];
+    if (height >= WALL_MAX_HEIGHT)
+        return;
+
+    const bool isNewWall = height == 0.0f;
+    height = (std::min)(height + WALL_STEP, WALL_MAX_HEIGHT);
+    const int objectId = OBJ_ID_SNOW_WALL_START + gx * 100 + gz;
+
+    if (!isNewWall) {
+        SendStatusChange(objectId, STATUS_WALL_HEIGHT, height);
+        return;
+    }
+
+    S2C_AddObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ADD_OBJECT;
+    packet.object_id = objectId;
+    packet.obj_type = OBJ_SNOW_WALL;
+    packet.owner_slot = 0xFF;
+    // [11.22] 클라이언트가 눈 벽을 그리는 좌표에 맞춘다.
+    packet.x = gx * BLOCK_SIZE;
+    packet.y = GROUND_TOP + height / 2.0f;
+    packet.z = gz * BLOCK_SIZE;
+    packet.height = height;
+    Broadcast(&packet);
+}
