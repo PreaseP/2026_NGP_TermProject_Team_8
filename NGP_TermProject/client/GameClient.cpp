@@ -425,6 +425,17 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
         return;
     }
 
+    // [11.24] 서버가 지우라고 한 눈덩이를 목록에서 뺀다.
+    if (packet[1] == S2C_REMOVE_OBJECT) {
+        S2C_RemoveObject removed{};
+        std::memcpy(&removed, packet, sizeof(removed));
+        const auto found = objects.find(removed.object_id);
+        if (found != objects.end() && found->second.type == OBJ_SNOWBALL) {
+            objects.erase(found);
+        }
+        return;
+    }
+
     if (packet[1] == S2C_STATUS_CHANGE) {
         S2C_StatusChange state{};
         std::memcpy(&state, packet, sizeof(state));
@@ -449,11 +460,22 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
         return;
     }
     const auto found = objects.find(movement.object_id);
+    if (found == objects.end()) return;
+
+    // [11.24] 캐릭터와 눈덩이의 이동만 반영한다.
+    ClientObject& object = found->second;
+    if (object.type != OBJ_CHARACTER && object.type != OBJ_SNOWBALL) return;
+
     // [11.23] 현재 이동 보정은 캐릭터에만 적용한다.
-    if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
-    found->second.prevPos = found->second.renderPos;
-    found->second.targetPos = glm::vec3(movement.x, movement.y + CHARACTER_RENDER_OFFSET_Y, movement.z);
-    found->second.lerpT = 0.0f;
+    float targetY = movement.y;
+    if (object.type == OBJ_CHARACTER) {
+        targetY += CHARACTER_RENDER_OFFSET_Y;
+    }
+
+    // [11.24] 지금 보이는 위치에서 새 목표 위치로 이동을 시작한다.
+    object.prevPos = object.renderPos;
+    object.targetPos = glm::vec3(movement.x, targetY, movement.z);
+    object.lerpT = 0.0f;
 }
 
 void GameClient::UpdateVisuals(float dt)
@@ -544,7 +566,7 @@ void GameClient::ProcessPacket(const unsigned char* packet)
     // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.
     if (currentState == CLIENT_PLAYING &&
         (packet[1] == S2C_ADD_OBJECT || packet[1] == S2C_MOVE_OBJECT ||
-         packet[1] == S2C_STATUS_CHANGE)) {
+         packet[1] == S2C_REMOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
         ApplyWorldPacket(packet);
         return;
     }
