@@ -266,6 +266,37 @@ void Room::GiveRandomItem(int slot)
     server->SendPacket(playerSessionIds[slot], &packet);
 }
 
+void Room::UseItem(int slot, ITEM_TYPE item)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+    if (playerSessionIds[slot] == INVALID_ID)
+        return;
+
+    PlayerState& player = players[slot];
+    switch (item) {
+    case ITEM_SHIELD:
+        if (player.shield)
+            return;
+        break;
+    case ITEM_POWER_UP:
+        if (player.powerUp)
+            return;
+        break;
+    default:
+        return;
+    }
+
+    ITEM_TYPE* const end = player.items + player.itemCount;
+    ITEM_TYPE* const found = std::find(player.items, end, item);
+    if (found == end)
+        return;
+
+    // [11.23] 뒤의 아이템을 당겨서 빈칸 없이 보관한다.
+    std::copy(found + 1, end, found);
+    --player.itemCount;
+}
+
 void Room::RemoveSnowball(Snowball& snowball)
 {
     if (!snowball.active)

@@ -63,6 +63,7 @@ public:
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
     void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
     void GiveRandomItem(int slot);
+    void UseItem(int slot, ITEM_TYPE item);
     void RemoveSnowball(Snowball& snowball);
     void AddSnowWall(int gx, int gz);
 };
