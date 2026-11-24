@@ -490,18 +490,22 @@ void Room::UseItem(int slot, ITEM_TYPE item)
         return;
 
     PlayerState& player = players[slot];
+    bool* effect;
+    STATUS_TYPE status;
     switch (item) {
     case ITEM_SHIELD:
-        if (player.shield)
-            return;
+        effect = &player.shield;
+        status = STATUS_SHIELD;
         break;
     case ITEM_POWER_UP:
-        if (player.powerUp)
-            return;
+        effect = &player.powerUp;
+        status = STATUS_POWER_UP;
         break;
     default:
         return;
     }
+    if (*effect)
+        return;
 
     ITEM_TYPE* const end = player.items + player.itemCount;
     ITEM_TYPE* const found = std::find(player.items, end, item);
@@ -511,6 +515,15 @@ void Room::UseItem(int slot, ITEM_TYPE item)
     // [11.23] 뒤의 아이템을 당겨서 빈칸 없이 보관한다.
     std::copy(found + 1, end, found);
     --player.itemCount;
+    *effect = true;
+
+    S2C_ItemUsed packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ITEM_USED;
+    packet.user_slot = static_cast<unsigned char>(slot);
+    packet.item = item;
+    Broadcast(&packet);
+    SendStatusChange(slot, status, 1.0f);
 }
 
 void Room::RemoveSnowball(Snowball& snowball)
