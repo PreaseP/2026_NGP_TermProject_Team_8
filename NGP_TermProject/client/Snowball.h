@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <gl/glew.h>
 #include <gl/glm/glm.hpp>
 #include <gl/glm/ext.hpp>
@@ -47,6 +47,8 @@ public:
 
     bool getIsActive() const { return isActive; }
     glm::vec3 getPosition() const { return position; }
+    // [11.23] 화면에 그릴 위치를 지정한다.
+    void setPosition(const glm::vec3& pos) { position = pos; }
     float getRadius() const { return radius; }
 
     bool checkCollision(const glm::vec3& point, float distance) const;

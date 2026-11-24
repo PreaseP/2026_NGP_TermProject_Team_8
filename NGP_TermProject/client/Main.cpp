@@ -76,6 +76,8 @@ static GameClient gameClient;
 
 static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
 static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
+// [11.23] 모든 네트워크 눈덩이는 같은 구 모양으로 그린다.
+static Snowball* matchSnowball = nullptr;
 static bool matchSceneInitialized = false;
 
 template<class CharacterType>
@@ -99,6 +101,9 @@ void ClearMatchScene() {
         ReleaseCharacter(matchSteve[slot]);
         ReleaseCharacter(matchAlex[slot]);
     }
+    // [11.23] 경기 화면을 정리할 때 눈덩이의 그래픽 자원도 비운다.
+    delete matchSnowball;
+    matchSnowball = nullptr;
     matchSceneInitialized = false;
 }
 
@@ -762,7 +767,11 @@ void SpecialKeyboardUp(int key, int x, int y)
 
 void OnMouseButton(int button, int state, int x, int y)
 {
-    if (gameClient.GetState() == CLIENT_PLAYING) return;
+    // [11.20] 경기 중 마우스 입력을 차징과 던지기 처리로 넘긴다.
+    if (gameClient.GetState() == CLIENT_PLAYING) {
+        gameClient.OnMouse(button, state);
+        return;
+    }
 	// [11.7] 버튼 클릭 로그인 요청
 	if (gameClient.GetState() == CLIENT_LOGIN) {
 		if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
@@ -962,11 +971,18 @@ GLvoid Drawscene()
             gameMap.initialize();
             for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
                 const ClientObject* player = gameClient.GetObject(slot);
-                if (player->character == CHAR_STEVE)
+                if (player->character == CHAR_STEVE) {
                     matchSteve[slot] = new Steve::Character("steve.png");
-                else
+                    matchSteve[slot]->pos = player->renderPos;
+                }
+                else {
                     matchAlex[slot] = new Alex::Character("alex.png");
+                    matchAlex[slot]->pos = player->renderPos;
+                }
             }
+            // [11.23] 그리기에 쓸 눈덩이 모양을 경기 시작 때 한 번 준비한다.
+            matchSnowball = new Snowball(glm::vec3(0.0f),
+                glm::vec3(0.0f, 0.0f, 1.0f), 0.0f, 0.15f);
             matchSceneInitialized = true;
         }
         const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
@@ -1088,6 +1104,13 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
                 if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
             }
         }
+        // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
+        for (const auto& entry : gameClient.GetObjects()) {
+            const ClientObject& object = entry.second;
+            if (object.type != OBJ_SNOWBALL) continue;
+            matchSnowball->setPosition(object.renderPos);
+            matchSnowball->render(shaderProgramID);
+        }
         return;
     }
 	if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
@@ -1165,12 +1188,53 @@ void checkAlexMoving()
 	if (!moving && alex) alex->changeState(1, 0);
 }
 
+template<class CharacterType>
+void UpdateMatchCharacter(CharacterType* character, const ClientObject& player, float dt)
+{
+    if (!character) return;
+    const bool isMoving = character->pos.x != player.renderPos.x ||
+        character->pos.z != player.renderPos.z;
+    character->pos = player.renderPos;
+    if (character->armState != player.armState) {
+        switch (player.armState) {
+        case ARM_CHARGE:
+            character->enterCharge();
+            break;
+        case ARM_THROW:
+            if (character->armAngle >= 0.0f) character->armAngle = -glm::radians(90.0f);
+            character->enterThrow();
+            break;
+        default:
+            character->changeState(0, player.armState);
+            break;
+        }
+    }
+    if (player.armState == ARM_CHARGE) {
+        character->armAngle = std::max(-glm::radians(180.0f),
+            character->armAngle - glm::radians(180.0f) * dt / maxChargeTime);
+    }
+    character->changeState(1, isMoving ? 1 : 0);
+    character->updateAnimation(dt, isMoving, true);
+}
+
 void TimerFunction(int value)
 {
 	// [11.6] 타이틀 화면에서도 통신을 처리하도록 화면 검사 전에 호출한다.
 	gameClient.Tick();
 
-	if (currentGameState == GameState::TITLE_SCREEN) {
+    const int now = glutGet(GLUT_ELAPSED_TIME);
+    static int lastAnimationMs = now;
+    const float animationDt = std::min(static_cast<float>(now - lastAnimationMs) / 1000.0f, 0.05f);
+    lastAnimationMs = now;
+    if (gameClient.GetState() == CLIENT_PLAYING && matchSceneInitialized) {
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject& player = *gameClient.GetObject(slot);
+            UpdateMatchCharacter(matchSteve[slot], player, animationDt);
+            UpdateMatchCharacter(matchAlex[slot], player, animationDt);
+        }
+    }
+
+	if (gameClient.GetState() == CLIENT_PLAYING || currentGameState == GameState::TITLE_SCREEN) {
 		glutPostRedisplay();
 		glutTimerFunc(16, TimerFunction, 1);
 		return;
