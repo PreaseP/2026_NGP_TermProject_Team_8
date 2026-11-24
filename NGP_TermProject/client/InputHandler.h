@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "../common/protocol.h"
+#include <chrono>
 
 class GameClient;
 
@@ -22,6 +23,7 @@ public:
     void OnKeyDown(unsigned char key); // [11.6] 로그인 화면의 닉네임 입력을 처리한다.
     void OnKeyUp(unsigned char key);
     void OnMouse(int button, int state); // [11.20] 차징과 던지기 입력을 처리한다.
+    bool TryGetChargeSeconds(float& seconds) const; // [11.24] 누르고 있는 동안의 시간을 읽는다.
     void ProcessInput();
     void Reset(); // [11.6] 이전 이동 기록과 공격 버튼 상태를 비운다.
 
@@ -30,6 +32,7 @@ private:
     unsigned char moveKeys = 0;
     unsigned char previousKeys = 0; // [11.6] 마지막으로 보낸 이동 방향 기록
     bool attackPressed = false; // [11.6] 공격 버튼을 누르고 있는지 기록
+    std::chrono::steady_clock::time_point chargeStartTime{};
     char nameBuffer[MAX_NAME_LEN]{}; // [11.6] 입력할 닉네임.
     int nameLength = 0; // [11.6] 입력한 닉네임의 글자 수
     char serverAddress[16] = "127.0.0.1";
