@@ -12,7 +12,13 @@ struct ClientObject {
     int objectId = -1;
     OBJECT_TYPE type = OBJ_CHARACTER;
     CHARACTER_TYPE character = CHAR_NONE;
+    unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
+    bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
     glm::vec3 renderPos{0.0f};
+    glm::vec3 prevPos{0.0f};
+    glm::vec3 targetPos{0.0f};
+    float lerpT = 1.0f;
+    ARM_STATE armState = ARM_IDLE;
 };
 
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
@@ -34,6 +40,8 @@ public:
         const auto found = objects.find(objectId);
         return found != objects.end() ? &found->second : nullptr;
     }
+    // [11.23] 화면에서 물체 목록을 읽기만 할 수 있게 한다.
+    const std::unordered_map<int, ClientObject>& GetObjects() const { return objects; }
     int GetHP(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
         return hp[slot];
@@ -73,6 +81,7 @@ public:
     CLIENT_STATE GetState() const { return currentState; } // [11.6] 입력 처리기가 현재 상태를 확인한다.
     void OnKeyUp(unsigned char key) { inputHandler.OnKeyUp(key); }
     void OnKeyDown(unsigned char key) { inputHandler.OnKeyDown(key); } // [11.6] 콜백에서 받은 키를 입력 처리기에 전달한다.
+    void OnMouse(int button, int state) { inputHandler.OnMouse(button, state); } // [11.20] 마우스 입력을 전달한다.
 
 private:
     void HandleDisconnect(); // [11.9] 이전 접속 정보를 비우고 첫 로그인 화면으로 돌아간다.
@@ -82,8 +91,10 @@ private:
     // [11.5] ExtractPacket(NetworkClient안에 있음)으로 꺼낸 패킷의 종류와 길이를 확인한다.
     void ProcessPacket(const unsigned char* packet);
     void ApplyWorldPacket(const unsigned char* packet);
+    void UpdateVisuals(float dt); // [11.18] 보간
 
     CLIENT_STATE currentState = CLIENT_LOGIN;
+    ULONGLONG lastTickMs = 0;
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호

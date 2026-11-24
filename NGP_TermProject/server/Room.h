@@ -33,6 +33,11 @@ const glm::vec3 SPAWN_POS[MAX_ROOM_PLAYERS] = {
     {5.0f, GROUND_TOP, 2.0f}, {5.0f, GROUND_TOP, 13.0f}
 };
 const float FORWARD_Z[MAX_ROOM_PLAYERS] = { +1.0f, -1.0f };
+constexpr float PLAY_MIN_X = -0.5f;
+constexpr float PLAY_MAX_X = 9.5f;
+constexpr float PLAY_MIN_Z[MAX_ROOM_PLAYERS] = { -0.5f, 9.5f };
+constexpr float PLAY_MAX_Z[MAX_ROOM_PLAYERS] = { 4.5f, 14.5f };
+constexpr float MAX_DT = 0.1f;
 
 class GameServer;
 
@@ -61,9 +66,17 @@ public:
     void SendMoveObject(int objectId, const glm::vec3& pos) const; // 오브젝트 이동 좌표 전송
     static bool WorldToGrid(float x, float z, int* gx, int* gz); // 월드 좌표를 맵 칸으로 변환
     bool IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const; // 눈 벽에 막히는지 확인
+    void Update(ULONGLONG now, float dt); // 경기 갱신 및 대기실 복귀
+    void ReturnToWaiting();
     void UpdateCharacters(ULONGLONG now, float dt); // 캐릭터 위치와 팔 자세 갱신
-    void GiveRandomItem(int slot);
-    void UseItem(int slot, ITEM_TYPE item);
+    void StartCharge(int slot, ULONGLONG now); // 눈덩이 차징 시작
+    void ThrowSnowball(int slot, ULONGLONG now); // 차징에 따라 눈덩이 던지기
+    int AllocSnowballId();
+    void UpdateSnowballs(ULONGLONG now, float dt); // 눈덩이 이동·충돌·만료 처리
+    static bool CheckSnowballHit(const Snowball& snowball, const PlayerState& player); // 눈덩이 피격 판정
+    void ApplyHit(int target, bool powered, ULONGLONG now); // 방어막과 피해 처리
     void RemoveSnowball(Snowball& snowball);
     void AddSnowWall(int gx, int gz);
+    void GiveRandomItem(int slot);
+    void UseItem(int slot, ITEM_TYPE item);
 };

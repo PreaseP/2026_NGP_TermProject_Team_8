@@ -215,12 +215,12 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
             const glm::vec3 before = player.pos;
 
             glm::vec3 next = player.pos;
-            next.x = std::clamp(player.pos.x + dx, halfX, MAP_WIDTH * BLOCK_SIZE - halfX);
+            next.x = std::clamp(player.pos.x + dx, PLAY_MIN_X + halfX, PLAY_MAX_X - halfX);
             if (!IsBlockedByWall(next, stats.bbox))
                 player.pos.x = next.x;
 
             next = player.pos;
-            next.z = std::clamp(player.pos.z + dz, halfZ, MAP_DEPTH * BLOCK_SIZE - halfZ);
+            next.z = std::clamp(player.pos.z + dz, PLAY_MIN_Z[slot] + halfZ, PLAY_MAX_Z[slot] - halfZ);
             if (!IsBlockedByWall(next, stats.bbox))
                 player.pos.z = next.z;
 
@@ -240,6 +240,222 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
             player.armState = nextArm;
             SendStatusChange(slot, STATUS_ARM_STATE, static_cast<float>(nextArm));
         }
+    }
+}
+
+void Room::StartCharge(int slot, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+
+    PlayerState& player = players[slot];
+    if (player.charging || now < player.throwEndMs)
+        return;
+
+    player.charging = true;
+    player.chargeStartMs = now;
+}
+
+int Room::AllocSnowballId()
+{
+    const int id = nextSnowballID;
+    ++nextSnowballID;
+    if (nextSnowballID >= OBJ_ID_SNOW_WALL_START)
+        nextSnowballID = OBJ_ID_SNOWBALL_START;
+    return id;
+}
+
+void Room::ThrowSnowball(int slot, ULONGLONG now)
+{
+    if (state != ROOM_PLAYING || slot < 0 || slot >= MAX_ROOM_PLAYERS)
+        return;
+
+    PlayerState& player = players[slot];
+    if (!player.charging || player.character == CHAR_NONE)
+        return;
+
+    player.charging = false;
+
+    Snowball* snowball = nullptr;
+    for (Snowball& candidate : snowballs) {
+        if (!candidate.active) {
+            snowball = &candidate;
+            break;
+        }
+    }
+    if (snowball == nullptr)
+        return;
+
+    const ULONGLONG chargeMs = std::min<ULONGLONG>(now - player.chargeStartMs, MAX_CHARGE_MS);
+    const float charge = static_cast<float>(chargeMs) / MAX_CHARGE_MS;
+    const float speed = (MIN_THROW_SPEED + (MAX_THROW_SPEED - MIN_THROW_SPEED) * charge)
+        * CHARACTER_STATS[player.character].throwPower;
+
+    const glm::vec3 direction = glm::normalize(glm::vec3(0.0f, THROW_DIR_UP, FORWARD_Z[slot]));
+
+    snowball->active = true;
+    snowball->objectId = AllocSnowballId();
+    snowball->ownerSlot = static_cast<unsigned char>(slot);
+    snowball->powered = player.powerUp;
+    snowball->pos = player.pos + glm::vec3(0.0f, THROW_START_UP, FORWARD_Z[slot] * THROW_START_FORWARD);
+    snowball->vel = direction * speed;
+    snowball->lifeTime = 0.0f;
+
+    player.throwEndMs = now + THROW_ANIM_MS;
+    if (player.powerUp) {
+        player.powerUp = false;
+        SendStatusChange(slot, STATUS_POWER_UP, 0.0f);
+    }
+
+    S2C_AddObject packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ADD_OBJECT;
+    packet.object_id = snowball->objectId;
+    packet.obj_type = OBJ_SNOWBALL;
+    packet.owner_slot = snowball->ownerSlot;
+    packet.x = snowball->pos.x;
+    packet.y = snowball->pos.y;
+    packet.z = snowball->pos.z;
+    packet.height = 0.0f;
+    packet.powered = snowball->powered;
+    Broadcast(&packet);
+}
+
+bool Room::CheckSnowballHit(const Snowball& snowball, const PlayerState& player)
+{
+    if (player.character == CHAR_NONE)
+        return false;
+
+    const glm::vec3& bbox = CHARACTER_STATS[player.character].bbox;
+    const glm::vec3 boxMin(player.pos.x - bbox.x * 0.5f, player.pos.y, player.pos.z - bbox.z * 0.5f);
+    const glm::vec3 boxMax(player.pos.x + bbox.x * 0.5f, player.pos.y + bbox.y, player.pos.z + bbox.z * 0.5f);
+
+    const glm::vec3 closest = glm::clamp(snowball.pos, boxMin, boxMax);
+    const glm::vec3 diff = snowball.pos - closest;
+    return glm::dot(diff, diff) <= SNOWBALL_RADIUS * SNOWBALL_RADIUS;
+}
+
+void Room::ApplyHit(int target, bool powered, ULONGLONG now)
+{
+    PlayerState& player = players[target];
+
+    S2C_Hit packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_HIT;
+    packet.target_slot = static_cast<unsigned char>(target);
+
+    if (player.shield) {
+        player.shield = false;
+        SendStatusChange(target, STATUS_SHIELD, 0.0f);
+        packet.blocked = true;
+    }
+    else {
+        const int damage = powered ? SNOWBALL_DAMAGE * 2 : SNOWBALL_DAMAGE;
+        player.hp = std::max(0, player.hp - damage);
+        packet.blocked = false;
+    }
+
+    packet.hp = player.hp;
+    Broadcast(&packet);
+
+    if (player.hp <= 0)
+        EndGame(1 - target, END_HP_ZERO, now);
+}
+
+void Room::UpdateSnowballs(ULONGLONG now, float dt)
+{
+    for (Snowball& snowball : snowballs) {
+        if (!snowball.active)
+            continue;
+
+        snowball.lifeTime += dt;
+        snowball.vel.y += GRAVITY * dt;
+        snowball.pos += snowball.vel * dt;
+
+        if (snowball.lifeTime >= SNOWBALL_LIFETIME) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
+        bool hit = false;
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            if (slot == snowball.ownerSlot || playerSessionIds[slot] == INVALID_ID)
+                continue;
+            if (!CheckSnowballHit(snowball, players[slot]))
+                continue;
+
+            const bool powered = snowball.powered;
+            RemoveSnowball(snowball);
+            ApplyHit(slot, powered, now);
+            hit = true;
+            break;
+        }
+        if (hit) {
+            if (state != ROOM_PLAYING)
+                return;
+            continue;
+        }
+
+        if (snowball.pos.x < PLAY_MIN_X || snowball.pos.x > PLAY_MAX_X
+            || snowball.pos.z < PLAY_MIN_Z[0] || snowball.pos.z > PLAY_MAX_Z[1]) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
+        int gx, gz;
+        if (!WorldToGrid((std::max)(snowball.pos.x, 0.0f), (std::max)(snowball.pos.z, 0.0f), &gx, &gz)) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
+        const bool hitWall = wallHeight[gx][gz] > 0.0f && snowball.pos.y <= GROUND_TOP + wallHeight[gx][gz];
+        const bool onGround = (snowball.pos.z >= PLAY_MIN_Z[0] && snowball.pos.z <= PLAY_MAX_Z[0])
+            || (snowball.pos.z >= PLAY_MIN_Z[1] && snowball.pos.z <= PLAY_MAX_Z[1]);
+        if (!onGround && snowball.pos.y < 0.0f) {
+            RemoveSnowball(snowball);
+            continue;
+        }
+
+        const bool hitGround = onGround && snowball.pos.y <= GROUND_TOP;
+        if (hitWall || hitGround) {
+            RemoveSnowball(snowball);
+            AddSnowWall(gx, gz);
+            continue;
+        }
+
+        SendMoveObject(snowball.objectId, snowball.pos);
+    }
+}
+
+void Room::ReturnToWaiting()
+{
+    state = ROOM_WAITING;
+    resultEndMS = 0;
+    nextItemMs = 0;
+    ResetWorld();
+
+    for (int i = 0; i < MAX_ROOM_PLAYERS; ++i) {
+        players[i] = PlayerState{};
+        selectedCharacters[i] = CHAR_NONE;
+    }
+
+    SendRoomInfo();
+    server->SendRoomList(INVALID_ID);
+}
+
+void Room::Update(ULONGLONG now, float dt)
+{
+    switch (state) {
+    case ROOM_PLAYING:
+        UpdateCharacters(now, dt);
+        UpdateSnowballs(now, dt);
+        break;
+    case ROOM_RESULT:
+        if (now >= resultEndMS)
+            ReturnToWaiting();
+        break;
+    default:
+        break;
     }
 }
 

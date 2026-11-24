@@ -3,6 +3,10 @@
 #include <cstddef>
 #include <cmath>
 #include <cstring> // [11.6] 닉네임을 패킷에 복사한다.
+#include <Windows.h>
+
+// [11.20] 서버의 발 높이를 모델과 카메라의 기준 높이로 맞춘다.
+constexpr float CHARACTER_RENDER_OFFSET_Y = 1.0f;
 
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
 bool GameClient::Init(const char* ip)
@@ -27,6 +31,7 @@ bool GameClient::Init(const char* ip)
     }
 
     inputHandler.SetServerAddress(serverIp.c_str());
+    lastTickMs = GetTickCount64();
     currentState = CLIENT_LOGIN;
     mySessionId = -1;
     myRoomId = -1;
@@ -128,8 +133,13 @@ void GameClient::HandleDisconnect()
 // [11.6] 지금은 기존 통신 처리를 한 번 진행한다.
 void GameClient::Tick()
 {
+    const ULONGLONG now = GetTickCount64();
+    const float dt = static_cast<float>(now - lastTickMs) / 1000.0f;
+    lastTickMs = now;
+
     inputHandler.ProcessInput();
     PollNetwork();
+    UpdateVisuals(dt);
 }
 
 // [11.6] 로그인 성공 여부는 이후 서버 응답으로 확인한다.
@@ -256,6 +266,22 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
         break;
     }
 
+    // [11.20] 경기 중에는 정해진 크기의 차징 시작 요청만 받는다.
+    case C2S_CHARGE_START:
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_ChargeStart)) {
+            errorMessage = "Invalid charge start request.";
+            return false;
+        }
+        break;
+
+    // [11.20] 던지기 요청도 경기 상태와 패킷 크기를 확인한다.
+    case C2S_THROW:
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_Throw)) {
+            errorMessage = "Invalid throw request.";
+            return false;
+        }
+        break;
+
     default:
         break;
     }
@@ -350,7 +376,11 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
         player.objectId = slot;
         player.type = OBJ_CHARACTER;
         player.character = result.character[slot];
-        player.renderPos = glm::vec3(result.x[slot], result.y[slot], result.z[slot]);
+        player.renderPos = glm::vec3(result.x[slot], result.y[slot] + CHARACTER_RENDER_OFFSET_Y, result.z[slot]);
+        player.prevPos = player.renderPos;
+        player.targetPos = player.renderPos;
+        player.lerpT = 1.0f;
+        player.armState = ARM_IDLE;
         objects[slot] = player;
         hp[slot] = MAX_HP;
     }
@@ -362,6 +392,65 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 
 void GameClient::ApplyWorldPacket(const unsigned char* packet)
 {
+    // [11.23] 생성 패킷을 읽고 눈덩이에 필요한 값을 확인한다.
+    if (packet[1] == S2C_ADD_OBJECT) {
+        S2C_AddObject added{};
+        std::memcpy(&added, packet, sizeof(added));
+        // [11.23] 눈 벽 생성은 해당 일정에서 연결한다.
+        if (added.obj_type == OBJ_SNOW_WALL) return;
+
+        // [11.23] 강화 여부는 bool로 사용하기 전에 0 또는 1인지 확인한다.
+        const unsigned char poweredValue = packet[offsetof(S2C_AddObject, powered)];
+        if (added.obj_type != OBJ_SNOWBALL ||
+            added.object_id < OBJ_ID_SNOWBALL_START ||
+            added.object_id >= OBJ_ID_SNOW_WALL_START ||
+            added.owner_slot >= MAX_ROOM_PLAYERS ||
+            !std::isfinite(added.x) || !std::isfinite(added.y) || !std::isfinite(added.z) ||
+            poweredValue > 1) {
+            HandleDisconnect();
+            return;
+        }
+        // [11.23] 서버가 알려 준 눈덩이 정보를 저장한다.
+        ClientObject snowball{};
+        snowball.objectId = added.object_id;
+        snowball.type = OBJ_SNOWBALL;
+        snowball.ownerSlot = added.owner_slot;
+        snowball.powered = added.powered;
+        // [11.23] 처음에는 세 위치를 생성 위치로 맞춰 바로 놓는다.
+        snowball.renderPos = glm::vec3(added.x, added.y, added.z);
+        snowball.prevPos = snowball.renderPos;
+        snowball.targetPos = snowball.renderPos;
+        snowball.lerpT = 1.0f;
+        objects[snowball.objectId] = snowball;
+        return;
+    }
+
+    // [11.24] 서버가 지우라고 한 눈덩이를 목록에서 뺀다.
+    if (packet[1] == S2C_REMOVE_OBJECT) {
+        S2C_RemoveObject removed{};
+        std::memcpy(&removed, packet, sizeof(removed));
+        const auto found = objects.find(removed.object_id);
+        if (found != objects.end() && found->second.type == OBJ_SNOWBALL) {
+            objects.erase(found);
+        }
+        return;
+    }
+
+    if (packet[1] == S2C_STATUS_CHANGE) {
+        S2C_StatusChange state{};
+        std::memcpy(&state, packet, sizeof(state));
+        if (state.status != STATUS_ARM_STATE) return;
+        if (state.object_id < 0 ||
+            (state.value != ARM_IDLE && state.value != ARM_RUN &&
+             state.value != ARM_CHARGE && state.value != ARM_THROW)) {
+            HandleDisconnect();
+            return;
+        }
+        const auto found = objects.find(state.object_id);
+        if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
+        found->second.armState = static_cast<ARM_STATE>(state.value);
+        return;
+    }
     if (packet[1] != S2C_MOVE_OBJECT) return;
     S2C_MoveObject movement{};
     std::memcpy(&movement, packet, sizeof(movement));
@@ -372,7 +461,33 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     }
     const auto found = objects.find(movement.object_id);
     if (found == objects.end()) return;
-    found->second.renderPos = glm::vec3(movement.x, movement.y, movement.z);
+
+    // [11.24] 캐릭터와 눈덩이의 이동만 반영한다.
+    ClientObject& object = found->second;
+    if (object.type != OBJ_CHARACTER && object.type != OBJ_SNOWBALL) return;
+
+    // [11.23] 현재 이동 보정은 캐릭터에만 적용한다.
+    float targetY = movement.y;
+    if (object.type == OBJ_CHARACTER) {
+        targetY += CHARACTER_RENDER_OFFSET_Y;
+    }
+
+    // [11.24] 지금 보이는 위치에서 새 목표 위치로 이동을 시작한다.
+    object.prevPos = object.renderPos;
+    object.targetPos = glm::vec3(movement.x, targetY, movement.z);
+    object.lerpT = 0.0f;
+}
+
+void GameClient::UpdateVisuals(float dt)
+{
+    if (currentState != CLIENT_PLAYING) return;
+    constexpr float moveDuration = 0.033f;
+    for (auto& entry : objects) {
+        ClientObject& object = entry.second;
+        if (object.lerpT >= 1.0f) continue;
+        object.lerpT = glm::min(object.lerpT + dt / moveDuration, 1.0f);
+        object.renderPos = glm::mix(object.prevPos, object.targetPos, object.lerpT); //glm::mix(출발점, 목표점, 진행도)는 두 위치 사이에서 진행도에 해당하는 위치를 계산
+    }
 }
 
 // [11.5]패킷 검사와 종류 구분
@@ -448,7 +563,10 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         HandleGameStartResult(result);
         return;
     }
-    if (currentState == CLIENT_PLAYING && packet[1] == S2C_MOVE_OBJECT) {
+    // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.
+    if (currentState == CLIENT_PLAYING &&
+        (packet[1] == S2C_ADD_OBJECT || packet[1] == S2C_MOVE_OBJECT ||
+         packet[1] == S2C_REMOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
         ApplyWorldPacket(packet);
         return;
     }
