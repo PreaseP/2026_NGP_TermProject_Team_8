@@ -122,6 +122,7 @@ void InputHandler::OnMouse(int button, int state)
         request.type = C2S_CHARGE_START;
         if (game->QueueRequest(&request, sizeof(request))) {
             attackPressed = true;
+            chargeStartTime = std::chrono::steady_clock::now(); // [11.24] 조준점에 쓸 시작 시간
         }
         return;
     }
@@ -132,6 +133,13 @@ void InputHandler::OnMouse(int button, int state)
     C2S_Throw request{};
     request.type = C2S_THROW;
     game->QueueRequest(&request, sizeof(request));
+}
+
+bool InputHandler::TryGetChargeSeconds(float& seconds) const
+{
+    if (!attackPressed) return false;
+    seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - chargeStartTime).count();
+    return true;
 }
 
 void InputHandler::ProcessInput()

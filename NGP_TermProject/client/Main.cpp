@@ -78,6 +78,7 @@ static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
 static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
 // [11.23] 모든 네트워크 눈덩이는 같은 구 모양으로 그린다.
 static Snowball* matchSnowball = nullptr;
+static GLuint landingMarkerVao = 0, landingMarkerVbo = 0;
 static bool matchSceneInitialized = false;
 
 template<class CharacterType>
@@ -104,6 +105,10 @@ void ClearMatchScene() {
     // [11.23] 경기 화면을 정리할 때 눈덩이의 그래픽 자원도 비운다.
     delete matchSnowball;
     matchSnowball = nullptr;
+    // [11.24] 경기 화면과 함께 조준점 그리기 자료도 비운다.
+    glDeleteVertexArrays(1, &landingMarkerVao);
+    glDeleteBuffers(1, &landingMarkerVbo);
+    landingMarkerVao = landingMarkerVbo = 0;
     matchSceneInitialized = false;
 }
 
@@ -1055,6 +1060,112 @@ GLvoid Drawscene()
 // {
 // }
 
+struct LandingMarker {
+    glm::vec3 position;
+    float tilt;
+};
+
+// [11.24] 지금 놓으면 눈덩이가 바닥 높이와 뒤쪽 벽 중 어디에 먼저 닿는지 구한다.
+static LandingMarker PredictSnowballMarker(const ClientObject& player, int slot, float chargeSeconds)
+{
+    // 서버 Room::ThrowSnowball과 같은 시작 위치, 방향, 속도를 사용한다.
+    constexpr float groundY = BLOCK_SIZE * 0.5f;
+    constexpr float chargeLimitSeconds = 1.0f;
+    constexpr float startUp = 0.8f;
+    constexpr float startForward = 1.0f;
+    constexpr float gravity = -9.8f;
+    constexpr float step = 0.033f; // 서버의 기본 한 틱은 33ms다.
+    constexpr float markerOffset = 0.015f; // 바닥이나 벽과 겹치지 않도록 조금 띄운다.
+    const float forward = slot == 0 ? 1.0f : -1.0f;
+    const float charge = std::min(chargeSeconds / chargeLimitSeconds, 1.0f);
+    const float throwPower = player.character == CHAR_STEVE ? 1.3f : 1.0f;
+    const float speed = glm::mix(2.0f, 15.0f, charge) * throwPower;
+    glm::vec3 velocity = glm::normalize(glm::vec3(0.0f, 0.3f, forward)) * speed;
+    glm::vec3 position(player.renderPos.x, groundY + startUp, player.renderPos.z + startForward * forward);
+
+    const float wallZ = slot == 0 ? MAP_DEPTH * BLOCK_SIZE - groundY : -groundY;
+    glm::vec3 previous;
+    do {
+        previous = position;
+        velocity.y += gravity * step;
+        position += velocity * step;
+
+        // 벽을 넘은 한 틱 안에서 벽에 닿는 순간의 높이를 구한다.
+        if ((previous.z - wallZ) * forward < 0.0f && (position.z - wallZ) * forward >= 0.0f) {
+            const float t = (wallZ - previous.z) / (position.z - previous.z);
+            const float wallY = glm::mix(previous.y, position.y, t);
+            if (wallY >= groundY) {
+                return { glm::vec3(position.x, wallY, wallZ - markerOffset * forward),
+                    -forward * glm::half_pi<float>() };
+            }
+        }
+    } while (position.y > groundY);
+
+    // 중앙의 빈 공간에서도 양쪽 바닥과 같은 높이에 표시한다.
+    const float t = (groundY - previous.y) / (position.y - previous.y);
+    const float landingZ = glm::mix(previous.z, position.z, t);
+    return { glm::vec3(position.x, groundY + markerOffset, landingZ), 0.0f };
+}
+
+// [11.24] 예상 위치에 빨간 원과 가운데 십자가를 함께 그린다.
+static void DrawLandingMarker(const LandingMarker& marker)
+{
+    constexpr int segments = 32;
+    constexpr int ringVertexCount = (segments + 1) * 2;
+    constexpr int crossVertexCount = 14;
+    if (landingMarkerVao == 0) {
+        glm::vec3 vertices[ringVertexCount + crossVertexCount];
+        for (int i = 0; i <= segments; ++i) {
+            const float angle = glm::two_pi<float>() * i / segments;
+            const glm::vec3 direction(std::cos(angle), 0.0f, std::sin(angle));
+            vertices[2 * i] = direction * 0.38f;
+            vertices[2 * i + 1] = direction * 0.29f;
+        }
+        // 십자가는 가운데 점에서 바깥 윤곽으로 삼각형을 이어 만든다.
+        constexpr float arm = 0.18f;
+        constexpr float halfWidth = 0.035f;
+        const glm::vec3 crossVertices[crossVertexCount] = {
+            { 0.0f, 0.0f, 0.0f },
+            { -halfWidth, 0.0f, arm }, { halfWidth, 0.0f, arm },
+            { halfWidth, 0.0f, halfWidth }, { arm, 0.0f, halfWidth },
+            { arm, 0.0f, -halfWidth }, { halfWidth, 0.0f, -halfWidth },
+            { halfWidth, 0.0f, -arm }, { -halfWidth, 0.0f, -arm },
+            { -halfWidth, 0.0f, -halfWidth }, { -arm, 0.0f, -halfWidth },
+            { -arm, 0.0f, halfWidth }, { -halfWidth, 0.0f, halfWidth },
+            { -halfWidth, 0.0f, arm }
+        };
+        std::copy_n(crossVertices, crossVertexCount, vertices + ringVertexCount);
+
+        glGenVertexArrays(1, &landingMarkerVao);
+        glGenBuffers(1, &landingMarkerVbo);
+        glBindVertexArray(landingMarkerVao);
+        glBindBuffer(GL_ARRAY_BUFFER, landingMarkerVbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), nullptr);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+    const glm::mat4 model = glm::rotate(glm::translate(glm::mat4(1.0f), marker.position),
+        marker.tilt, glm::vec3(1.0f, 0.0f, 0.0f));
+    const GLint uiModeLoc = glGetUniformLocation(shaderProgramID, "uiMode");
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "model"), 1, GL_FALSE, &model[0][0]);
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 0);
+    glUniform1i(uiModeLoc, 1);
+    glUniform4f(glGetUniformLocation(shaderProgramID, "uiColor"), 1.0f, 0.06f, 0.06f, 0.85f);
+    glBindVertexArray(landingMarkerVao);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, ringVertexCount);
+    glDrawArrays(GL_TRIANGLE_FAN, ringVertexCount, crossVertexCount);
+    glBindVertexArray(0);
+    glUniform1i(uiModeLoc, 0);
+    glDepthMask(GL_TRUE);
+    if (!blendEnabled) glDisable(GL_BLEND);
+}
+
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 {
 	glEnable(GL_CULL_FACE);
@@ -1110,6 +1221,12 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
             if (object.type != OBJ_SNOWBALL) continue;
             matchSnowball->setPosition(object.renderPos);
             matchSnowball->render(shaderProgramID);
+        }
+        // [11.24] 내 차징 중에만 예상 착지점을 바닥에 그린다.
+        float chargeSeconds;
+        const int mySlot = gameClient.GetMySlot();
+        if (gameClient.TryGetChargeSeconds(chargeSeconds)) {
+            DrawLandingMarker(PredictSnowballMarker(*gameClient.GetObject(mySlot), mySlot, chargeSeconds));
         }
         return;
     }
