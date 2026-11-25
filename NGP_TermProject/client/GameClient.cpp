@@ -436,6 +436,18 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
         return;
     }
 
+    // [11.25] 맞은 자리와 남은 체력을 확인하고 저장한다.
+    if (packet[1] == S2C_HIT) {
+        S2C_Hit hit{};
+        std::memcpy(&hit, packet, sizeof(hit));
+        if (hit.target_slot >= MAX_ROOM_PLAYERS || hit.hp < 0 || hit.hp > MAX_HP) {
+            HandleDisconnect();
+            return;
+        }
+        hp[hit.target_slot] = hit.hp;
+        return;
+    }
+
     if (packet[1] == S2C_STATUS_CHANGE) {
         S2C_StatusChange state{};
         std::memcpy(&state, packet, sizeof(state));
@@ -566,7 +578,8 @@ void GameClient::ProcessPacket(const unsigned char* packet)
     // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.
     if (currentState == CLIENT_PLAYING &&
         (packet[1] == S2C_ADD_OBJECT || packet[1] == S2C_MOVE_OBJECT ||
-         packet[1] == S2C_REMOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE)) {
+         packet[1] == S2C_REMOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE ||
+         packet[1] == S2C_HIT)) {
         ApplyWorldPacket(packet);
         return;
     }
