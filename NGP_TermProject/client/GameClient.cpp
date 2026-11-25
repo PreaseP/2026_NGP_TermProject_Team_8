@@ -346,13 +346,26 @@ void GameClient::PollNetwork()
 void GameClient::ClearWorld()
 {
     objects.clear();
-    for (int& playerHp : hp) {
-        playerHp = 0;
+    for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+        hp[slot] = 0;
+        // [11.25] 이전 경기의 피격 표시를 지운다.
+        lastHitMs[slot] = 0;
     }
     gameStartResult = {};
     for (CHARACTER_TYPE& character : gameStartResult.character) {
         character = CHAR_NONE;
     }
+}
+
+bool GameClient::ShouldFlashHearts() const // 이번 프레임에 하트의 흰 테두리를 켤지 검사
+{
+    if (mySlot < 0 || mySlot >= MAX_ROOM_PLAYERS || lastHitMs[mySlot] == 0) return false;
+
+    // [11.25] 140ms마다 일반 하트와 흰 테두리 하트를 세 번 번갈아 표시한다.
+    constexpr ULONGLONG phaseMs = 140;
+    constexpr ULONGLONG phaseCount = 6;
+    const ULONGLONG phase = (GetTickCount64() - lastHitMs[mySlot]) / phaseMs;
+    return phase < phaseCount && phase % 2 == 1;
 }
 
 void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
@@ -444,7 +457,12 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             HandleDisconnect();
             return;
         }
-        hp[hit.target_slot] = hit.hp;
+        int& targetHp = hp[hit.target_slot];
+        // [11.25] 체력이 줄어든 자리의 피격 시각을 기록한다.
+        if (hit.hp < targetHp) {
+            lastHitMs[hit.target_slot] = GetTickCount64();
+        }
+        targetHp = hit.hp;
         return;
     }
 

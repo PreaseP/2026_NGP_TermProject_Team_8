@@ -46,6 +46,7 @@ public:
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
         return hp[slot];
     }
+    bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
     const RoomPlayerInfo* GetRoomPlayer(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
@@ -103,6 +104,7 @@ private:
     S2C_GameStartResult gameStartResult{};
     std::unordered_map<int, ClientObject> objects;
     int hp[MAX_ROOM_PLAYERS]{};
+    ULONGLONG lastHitMs[MAX_ROOM_PLAYERS]{};
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
     int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.
