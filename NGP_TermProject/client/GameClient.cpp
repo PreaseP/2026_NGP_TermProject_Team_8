@@ -368,6 +368,19 @@ bool GameClient::ShouldFlashHearts() const // 이번 프레임에 하트의 흰 
     return phase < phaseCount && phase % 2 == 1;
 }
 
+float GameClient::GetHitEffectStrength(int slot) const //카메라와 캐릭터 색 효과를 얼마나 강하게 줄지 (피격시)
+{
+    if (slot < 0 || slot >= MAX_ROOM_PLAYERS || lastHitMs[slot] == 0) return 0.0f;
+
+    // [11.25] 피격 직후 가장 강하고 150ms 안에 부드럽게 사라진다.
+    constexpr ULONGLONG durationMs = 150;
+    const ULONGLONG elapsedMs = GetTickCount64() - lastHitMs[slot];
+    if (elapsedMs >= durationMs) return 0.0f;
+
+    const float remaining = 1.0f - static_cast<float>(elapsedMs) / durationMs;
+    return remaining * remaining * (3.0f - 2.0f * remaining);
+}
+
 void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
 {
     if (!result.success) {

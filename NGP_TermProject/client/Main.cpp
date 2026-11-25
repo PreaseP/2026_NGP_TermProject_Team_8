@@ -1103,6 +1103,15 @@ GLvoid Drawscene()
             view = alexCamera.getViewMatrix();
             projection = alexCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
         }
+        // [11.25] 맞은 직후 3D 화면을 살짝 뒤로 밀고 기울인다.
+        const float hitStrength = gameClient.GetHitEffectStrength(mySlot);
+        if (hitStrength > 0.0f) {
+            glm::mat4 recoil = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -0.10f * hitStrength)); //recoil 뒷걸음질
+            recoil = glm::rotate(recoil, glm::radians(-3.0f) * hitStrength, glm::vec3(1.0f, 0.0f, 0.0f));
+            recoil = glm::rotate(recoil, glm::radians(4.0f) * hitStrength, glm::vec3(0.0f, 0.0f, 1.0f));
+            view = recoil * view;
+            cameraPos = glm::vec3(glm::inverse(view)[3]);
+        }
         renderWorld(view, projection);
         // [11.25] 맵과 캐릭터를 그린 다음 HUD를 화면 위에 올린다.
         DrawGameUI(me->character, gameClient.GetHP(mySlot), winW, winH);
@@ -1301,18 +1310,24 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
     if (gameClient.GetState() == CLIENT_PLAYING) {
         if (viewPosLoc != -1) glUniform3fv(viewPosLoc, 1, &cameraPos[0]);
         if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
+        const int mySlot = gameClient.GetMySlot();
+        const GLint hitTintLoc = glGetUniformLocation(shaderProgramID, "hitTint");
         for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
             const ClientObject* player = gameClient.GetObject(slot);
             const float facing = slot == 0 ? 0.0f : 180.0f;
+            const bool drawPlayer = slot != mySlot;
+            // [11.25] 맞은 캐릭터를 그릴 동안에만 붉은색을 섞는다.
+            glUniform1f(hitTintLoc, drawPlayer ? 0.65f * gameClient.GetHitEffectStrength(slot) : 0.0f);
             if (matchSteve[slot]) {
                 matchSteve[slot]->pos = player->renderPos;
-                if (slot != gameClient.GetMySlot()) matchSteve[slot]->draw(modelLoc, facing);
+                if (drawPlayer) matchSteve[slot]->draw(modelLoc, facing);
             }
             if (matchAlex[slot]) {
                 matchAlex[slot]->pos = player->renderPos;
-                if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
+                if (drawPlayer) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
             }
         }
+        glUniform1f(hitTintLoc, 0.0f);
         // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
         for (const auto& entry : gameClient.GetObjects()) {
             const ClientObject& object = entry.second;
@@ -1322,7 +1337,6 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
         }
         // [11.24] 내 차징 중에만 예상 착지점을 바닥에 그린다.
         float chargeSeconds;
-        const int mySlot = gameClient.GetMySlot();
         if (gameClient.TryGetChargeSeconds(chargeSeconds)) {
             DrawLandingMarker(PredictSnowballMarker(*gameClient.GetObject(mySlot), mySlot, chargeSeconds));
         }

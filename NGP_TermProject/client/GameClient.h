@@ -47,6 +47,7 @@ public:
         return hp[slot];
     }
     bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
+    float GetHitEffectStrength(int slot) const; // [11.25] 해당 자리의 피격 효과 세기를 알려 준다.
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
     const RoomPlayerInfo* GetRoomPlayer(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
