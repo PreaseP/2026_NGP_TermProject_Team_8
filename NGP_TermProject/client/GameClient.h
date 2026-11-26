@@ -14,6 +14,10 @@ struct ClientObject {
     CHARACTER_TYPE character = CHAR_NONE;
     unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
     bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
+    float height = 0.0f; // [11.26] 눈 벽의 현재 높이
+    float targetHeight = 0.0f; // [11.26] 눈 벽의 목표 높이
+    float startHeight = 0.0f; // [11.26] 높이가 바뀌기 시작할 때 보이던 높이
+    float wallBaseY = 0.0f; // [11.26] 고정할 눈 벽의 밑면 위치
     glm::vec3 renderPos{0.0f};
     glm::vec3 prevPos{0.0f};
     glm::vec3 targetPos{0.0f};

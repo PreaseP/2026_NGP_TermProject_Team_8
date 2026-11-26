@@ -422,8 +422,28 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     if (packet[1] == S2C_ADD_OBJECT) {
         S2C_AddObject added{};
         std::memcpy(&added, packet, sizeof(added));
-        // [11.23] 눈 벽 생성은 해당 일정에서 연결한다.
-        if (added.obj_type == OBJ_SNOW_WALL) return;
+        // [11.26] 서버가 알려 준 눈 벽의 번호, 위치, 높이를 저장한다.
+        if (added.obj_type == OBJ_SNOW_WALL) {
+            if (added.object_id < OBJ_ID_SNOW_WALL_START ||
+                !std::isfinite(added.x) || !std::isfinite(added.y) || !std::isfinite(added.z) ||
+                !std::isfinite(added.height) || added.height <= 0.0f) {
+                HandleDisconnect();
+                return;
+            }
+
+            ClientObject wall{};
+            wall.objectId = added.object_id;
+            wall.type = OBJ_SNOW_WALL;
+            wall.height = added.height;
+            wall.targetHeight = added.height; // [11.26] 처음에는 현재 높이와 목표 높이가 같다.
+            wall.startHeight = added.height;
+            wall.wallBaseY = added.y - added.height * 0.5f; // [11.26] 중심에서 높이의 절반을 빼면 밑면이다.
+            wall.renderPos = glm::vec3(added.x, added.y, added.z);
+            wall.prevPos = wall.renderPos;
+            wall.targetPos = wall.renderPos;
+            objects[wall.objectId] = wall;
+            return;
+        }
 
         // [11.23] 강화 여부는 bool로 사용하기 전에 0 또는 1인지 확인한다.
         const unsigned char poweredValue = packet[offsetof(S2C_AddObject, powered)];
@@ -482,6 +502,31 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     if (packet[1] == S2C_STATUS_CHANGE) {
         S2C_StatusChange state{};
         std::memcpy(&state, packet, sizeof(state));
+
+        // [11.26] 같은 번호의 눈 벽을 찾아 서버가 알려 준 목표 높이를 저장한다.
+        if (state.status == STATUS_WALL_HEIGHT) {
+            if (!std::isfinite(state.value) || state.value <= 0.0f) {
+                HandleDisconnect();
+                return;
+            }
+            const auto found = objects.find(state.object_id);
+            if (found == objects.end() || found->second.type != OBJ_SNOW_WALL) return;
+
+            ClientObject& wall = found->second;
+            if (wall.targetHeight == state.value) return;
+
+            // [11.26] 지금 보이는 높이에서 새 목표 높이까지 이어서 바꾼다.
+            wall.startHeight = wall.height;
+            wall.targetHeight = state.value;
+            wall.lerpT = 0.0f;
+            /*
+            벽이 0.5 → 1.0으로 자라는 중에 0.8까지 왔고, 서버가 새 목표 1.5를 보내면 
+            startHeight는 0.8, targetHeight는 1.5가 된다. 
+            그래서 0.8부터 자연스럽게 이어서 자람.
+            */
+            return;
+        }
+
         if (state.status != STATUS_ARM_STATE) return;
         if (state.object_id < 0 ||
             (state.value != ARM_IDLE && state.value != ARM_RUN &&
@@ -525,9 +570,20 @@ void GameClient::UpdateVisuals(float dt)
 {
     if (currentState != CLIENT_PLAYING) return;
     constexpr float moveDuration = 0.033f;
+    constexpr float wallHeightDuration = 1.5f; // [11.26] 기존 게임의 눈 벽 성장 시간이다.
     for (auto& entry : objects) {
         ClientObject& object = entry.second;
         if (object.lerpT >= 1.0f) continue;
+
+        if (object.type == OBJ_SNOW_WALL) {
+            object.lerpT = glm::min(object.lerpT + dt / wallHeightDuration, 1.0f);
+            // [11.26] 처음에 빠르게 자라고 목표 높이에 가까워지면 천천히 자란다.
+            const float progress = 1.0f - std::pow(1.0f - object.lerpT, 4.0f);
+            object.height = glm::mix(object.startHeight, object.targetHeight, progress);
+            object.renderPos.y = object.wallBaseY + object.height * 0.5f;
+            continue;
+        }
+
         object.lerpT = glm::min(object.lerpT + dt / moveDuration, 1.0f);
         object.renderPos = glm::mix(object.prevPos, object.targetPos, object.lerpT); //glm::mix(출발점, 목표점, 진행도)는 두 위치 사이에서 진행도에 해당하는 위치를 계산
     }
