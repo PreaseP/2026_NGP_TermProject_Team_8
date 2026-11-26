@@ -32,6 +32,7 @@ void Snow::cleanup()
     textureLoaded = false;
     totalVertexCount = 0;
     snowData.clear();
+    wallVisuals.clear();
     needsUpdate = true;
 }
 
@@ -196,6 +197,15 @@ float Snow::easeInOut(float t) const
     }
 }
 
+// [11.26] 그릴 눈 벽의 위치나 높이가 바뀔 때만 모양을 다시 만든다.
+void Snow::setWallVisuals(std::vector<SnowWallVisual> walls)
+{
+    if (wallVisuals == walls) return;
+
+    wallVisuals.swap(walls);
+    needsUpdate = true;
+}
+
 float Snow::getSnowHeightAt(int gridX, int gridZ) const
 {
     auto it = snowData.find({ gridX, gridZ });
@@ -253,6 +263,13 @@ void Snow::updateBuffers() const
             BLOCK_SIZE, animData.currentHeight, BLOCK_SIZE,
             allVertices, allNormals, allTexCoords, allAlphas,
             animData.alphaValue);
+    }
+
+    // [11.26] 경기에서 받은 중심과 표시 높이로 기존 눈 블록을 만든다.
+    for (const SnowWallVisual& wall : wallVisuals) {
+        generateSnowBlock(wall.center.x, wall.center.y, wall.center.z,
+            BLOCK_SIZE, wall.height, BLOCK_SIZE,
+            allVertices, allNormals, allTexCoords, allAlphas, 1.0f);
     }
 
     totalVertexCount = static_cast<GLsizei>(allVertices.size());
@@ -360,7 +377,7 @@ void Snow::generateSnowBlock(float x, float y, float z, float width, float heigh
 
 void Snow::render(GLuint shaderProgram) const
 {
-    if (snowData.empty()) return;
+    if (snowData.empty() && wallVisuals.empty()) return;
 
     if (needsUpdate) {
         updateBuffers();
@@ -403,6 +420,7 @@ void Snow::clearAll()
 {
     std::cout << "모든 눈 제거: " << snowData.size() << "개 블록" << std::endl;
     snowData.clear();
+    wallVisuals.clear();
     needsUpdate = true;
     totalVertexCount = 0;
 }

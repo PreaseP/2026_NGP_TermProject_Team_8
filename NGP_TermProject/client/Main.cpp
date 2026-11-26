@@ -11,6 +11,7 @@
 #include <gl/glm/ext.hpp>
 #include <gl/glm/gtc/matrix_transform.hpp>
 #include <vector>
+#include <utility>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -78,6 +79,7 @@ static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
 static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
 // [11.23] 모든 네트워크 눈덩이는 같은 구 모양으로 그린다.
 static Snowball* matchSnowball = nullptr;
+static Snow matchSnowWalls("snow.png"); // [11.26] 경기에서 받은 눈 벽을 그린다.
 static GLuint landingMarkerVao = 0, landingMarkerVbo = 0;
 static bool matchSceneInitialized = false;
 
@@ -105,6 +107,7 @@ void ClearMatchScene() {
     // [11.23] 경기 화면을 정리할 때 눈덩이의 그래픽 자원도 비운다.
     delete matchSnowball;
     matchSnowball = nullptr;
+    matchSnowWalls.cleanup(); // [11.26] 경기 전환과 창 종료 때 눈 벽을 정리한다.
     // [11.24] 경기 화면과 함께 조준점 그리기 자료도 비운다.
     glDeleteVertexArrays(1, &landingMarkerVao);
     glDeleteBuffers(1, &landingMarkerVbo);
@@ -1328,13 +1331,20 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
             }
         }
         glUniform1f(hitTintLoc, 0.0f);
+        std::vector<SnowWallVisual> walls;
         // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
         for (const auto& entry : gameClient.GetObjects()) {
             const ClientObject& object = entry.second;
-            if (object.type != OBJ_SNOWBALL) continue;
-            matchSnowball->setPosition(object.renderPos);
-            matchSnowball->render(shaderProgramID);
+            if (object.type == OBJ_SNOWBALL) {
+                matchSnowball->setPosition(object.renderPos);
+                matchSnowball->render(shaderProgramID);
+            } else if (object.type == OBJ_SNOW_WALL) {
+                // [11.26] 이번 프레임에 표시할 눈 벽의 중심과 높이를 모은다.
+                walls.push_back({ object.renderPos, object.height });
+            }
         }
+        matchSnowWalls.setWallVisuals(std::move(walls));
+        matchSnowWalls.render(shaderProgramID);
         // [11.24] 내 차징 중에만 예상 착지점을 바닥에 그린다.
         float chargeSeconds;
         if (gameClient.TryGetChargeSeconds(chargeSeconds)) {

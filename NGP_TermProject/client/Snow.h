@@ -21,10 +21,20 @@ struct SnowAnimationData {
     }
 };
 
+struct SnowWallVisual {
+    glm::vec3 center;
+    float height;
+
+    bool operator==(const SnowWallVisual& other) const {
+        return center == other.center && height == other.height;
+    }
+};
+
 class Snow
 {
 private:
     std::map<std::pair<int, int>, SnowAnimationData> snowData;
+    std::vector<SnowWallVisual> wallVisuals;
 
     mutable GLuint vao = 0;
     mutable GLuint vbo = 0;
@@ -68,6 +78,7 @@ public:
     void cleanup();
 
     void addSnowAt(float x, float z);
+    void setWallVisuals(std::vector<SnowWallVisual> walls);
 
     void updateAnimations(float deltaTime);
 
