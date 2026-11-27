@@ -148,12 +148,9 @@ void Room::SendMoveObject(int objectId, const glm::vec3& pos) const
 
 bool Room::WorldToGrid(float x, float z, int* gx, int* gz)
 {
-    if (x < 0.0f || z < 0.0f)
-        return false;
-
-    const int cellX = static_cast<int>(x / BLOCK_SIZE);
-    const int cellZ = static_cast<int>(z / BLOCK_SIZE);
-    if (cellX >= MAP_WIDTH || cellZ >= MAP_DEPTH)
+    const int cellX = static_cast<int>(std::floor(x / BLOCK_SIZE + 0.5f));
+    const int cellZ = static_cast<int>(std::floor(z / BLOCK_SIZE + 0.5f));
+    if (cellX < 0 || cellZ < 0 || cellX >= MAP_WIDTH || cellZ >= MAP_DEPTH)
         return false;
 
     *gx = cellX;
@@ -165,16 +162,12 @@ bool Room::IsBlockedByWall(const glm::vec3& pos, const glm::vec3& bbox) const
 {
     const float halfX = bbox.x * 0.5f;
     const float halfZ = bbox.z * 0.5f;
+    const float lastX = (MAP_WIDTH - 1) * BLOCK_SIZE;
+    const float lastZ = (MAP_DEPTH - 1) * BLOCK_SIZE;
 
     int minX, minZ, maxX, maxZ;
-    const bool minOk = WorldToGrid(pos.x - halfX, pos.z - halfZ, &minX, &minZ);
-    const bool maxOk = WorldToGrid(pos.x + halfX, pos.z + halfZ, &maxX, &maxZ);
-    if (!minOk)
-        minX = minZ = 0;
-    if (!maxOk) {
-        maxX = MAP_WIDTH - 1;
-        maxZ = MAP_DEPTH - 1;
-    }
+    WorldToGrid(std::clamp(pos.x - halfX, 0.0f, lastX), std::clamp(pos.z - halfZ, 0.0f, lastZ), &minX, &minZ);
+    WorldToGrid(std::clamp(pos.x + halfX, 0.0f, lastX), std::clamp(pos.z + halfZ, 0.0f, lastZ), &maxX, &maxZ);
 
     for (int gx = minX; gx <= maxX; ++gx) {
         for (int gz = minZ; gz <= maxZ; ++gz) {
@@ -211,10 +204,10 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
             const glm::vec3 before = player.pos;
 
             auto cellRange = [&](const glm::vec3& pos, glm::ivec2& low, glm::ivec2& high) {
-                low.x = std::clamp(static_cast<int>(std::floor((pos.x - halfX) / BLOCK_SIZE)), 0, MAP_WIDTH - 1);
-                low.y = std::clamp(static_cast<int>(std::floor((pos.z - halfZ) / BLOCK_SIZE)), 0, MAP_DEPTH - 1);
-                high.x = std::clamp(static_cast<int>(std::floor((pos.x + halfX) / BLOCK_SIZE)), 0, MAP_WIDTH - 1);
-                high.y = std::clamp(static_cast<int>(std::floor((pos.z + halfZ) / BLOCK_SIZE)), 0, MAP_DEPTH - 1);
+                low.x = std::clamp(static_cast<int>(std::floor((pos.x - halfX) / BLOCK_SIZE + 0.5f)), 0, MAP_WIDTH - 1);
+                low.y = std::clamp(static_cast<int>(std::floor((pos.z - halfZ) / BLOCK_SIZE + 0.5f)), 0, MAP_DEPTH - 1);
+                high.x = std::clamp(static_cast<int>(std::floor((pos.x + halfX) / BLOCK_SIZE + 0.5f)), 0, MAP_WIDTH - 1);
+                high.y = std::clamp(static_cast<int>(std::floor((pos.z + halfZ) / BLOCK_SIZE + 0.5f)), 0, MAP_DEPTH - 1);
             };
 
             glm::ivec2 low, high;
@@ -409,6 +402,7 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
 
         snowball.lifeTime += dt;
         snowball.vel.y += GRAVITY * dt;
+        const glm::vec3 prevPos = snowball.pos;
         snowball.pos += snowball.vel * dt;
 
         if (snowball.lifeTime >= SNOWBALL_LIFETIME) {
@@ -437,12 +431,22 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
 
         if (snowball.pos.x < PLAY_MIN_X || snowball.pos.x > PLAY_MAX_X
             || snowball.pos.z < PLAY_MIN_Z[0] || snowball.pos.z > PLAY_MAX_Z[1]) {
+            const bool behindFront = snowball.pos.z < PLAY_MIN_Z[0];
+            const bool behindBack = snowball.pos.z > PLAY_MAX_Z[1];
+            const float backZ = behindFront ? 0.0f : (MAP_DEPTH - 1) * BLOCK_SIZE;
+            const bool hitBackWall = (behindFront || behindBack)
+                && snowball.pos.y >= GROUND_TOP && snowball.pos.y <= BACK_WALL_TOP;
+
+            int wallX, wallZ;
+            const bool addSnow = hitBackWall && WorldToGrid(snowball.pos.x, backZ, &wallX, &wallZ);
             RemoveSnowball(snowball);
+            if (addSnow)
+                AddSnowWall(wallX, wallZ);
             continue;
         }
 
         int gx, gz;
-        if (!WorldToGrid((std::max)(snowball.pos.x, 0.0f), (std::max)(snowball.pos.z, 0.0f), &gx, &gz)) {
+        if (!WorldToGrid(snowball.pos.x, snowball.pos.z, &gx, &gz)) {
             RemoveSnowball(snowball);
             continue;
         }
@@ -457,8 +461,30 @@ void Room::UpdateSnowballs(ULONGLONG now, float dt)
 
         const bool hitGround = onGround && snowball.pos.y <= GROUND_TOP;
         if (hitWall || hitGround) {
+            int targetX = gx;
+            int targetZ = gz;
+
+            int prevX, prevZ;
+            if (hitWall && wallHeight[gx][gz] >= WALL_BLOCK_HEIGHT
+                && WorldToGrid(prevPos.x, prevPos.z, &prevX, &prevZ) && (prevX != gx || prevZ != gz)) {
+                const int dirX = gx > prevX ? 1 : -1;
+                const int dirZ = gz > prevZ ? 1 : -1;
+                const float enterX = prevX == gx ? 0.0f
+                    : ((gx - dirX * 0.5f) * BLOCK_SIZE - prevPos.x) / (snowball.pos.x - prevPos.x);
+                const float enterZ = prevZ == gz ? 0.0f
+                    : ((gz - dirZ * 0.5f) * BLOCK_SIZE - prevPos.z) / (snowball.pos.z - prevPos.z);
+                const float enterY = prevPos.y + (snowball.pos.y - prevPos.y) * (std::max)(enterX, enterZ);
+
+                if (enterY <= GROUND_TOP + wallHeight[gx][gz]) {
+                    if (enterX > enterZ)
+                        targetX = gx - dirX;
+                    else
+                        targetZ = gz - dirZ;
+                }
+            }
+
             RemoveSnowball(snowball);
-            AddSnowWall(gx, gz);
+            AddSnowWall(targetX, targetZ);
             continue;
         }
 
@@ -582,6 +608,16 @@ void Room::RemoveSnowball(Snowball& snowball)
 void Room::AddSnowWall(int gx, int gz)
 {
     if (gx < 0 || gx >= MAP_WIDTH || gz < 0 || gz >= MAP_DEPTH)
+        return;
+
+    const float cellZ = gz * BLOCK_SIZE;
+    if (cellZ > PLAY_MAX_Z[0] && cellZ < PLAY_MIN_Z[1])
+        return;
+
+    const bool frontSide = gz < MAP_DEPTH / 2;
+    const int backRow = frontSide ? 0 : MAP_DEPTH - 1;
+    const int behindZ = frontSide ? gz - 1 : gz + 1;
+    if (gz != backRow && wallHeight[gx][behindZ] < WALL_BLOCK_HEIGHT)
         return;
 
     float& height = wallHeight[gx][gz];
