@@ -206,22 +206,61 @@ void Room::UpdateCharacters(ULONGLONG now, float dt)
 
         if (player.character != CHAR_NONE && length != 0.0f) {
             const CharacterStats& stats = CHARACTER_STATS[player.character];
-            const float step = stats.moveSpeed * dt / length;
-            dx *= step;
-            dz *= step;
-
             const float halfX = stats.bbox.x * 0.5f;
             const float halfZ = stats.bbox.z * 0.5f;
             const glm::vec3 before = player.pos;
 
+            auto cellRange = [&](const glm::vec3& pos, glm::ivec2& low, glm::ivec2& high) {
+                low.x = std::clamp(static_cast<int>(std::floor((pos.x - halfX) / BLOCK_SIZE)), 0, MAP_WIDTH - 1);
+                low.y = std::clamp(static_cast<int>(std::floor((pos.z - halfZ) / BLOCK_SIZE)), 0, MAP_DEPTH - 1);
+                high.x = std::clamp(static_cast<int>(std::floor((pos.x + halfX) / BLOCK_SIZE)), 0, MAP_WIDTH - 1);
+                high.y = std::clamp(static_cast<int>(std::floor((pos.z + halfZ) / BLOCK_SIZE)), 0, MAP_DEPTH - 1);
+            };
+
+            glm::ivec2 low, high;
+            cellRange(player.pos, low, high);
+            float speed = stats.moveSpeed;
+            bool onThinSnow = false;
+            for (int gx = low.x; gx <= high.x; ++gx) {
+                for (int gz = low.y; gz <= high.y; ++gz) {
+                    if (wallHeight[gx][gz] > 0.0f && wallHeight[gx][gz] < WALL_BLOCK_HEIGHT)
+                        onThinSnow = true;
+                }
+            }
+            if (onThinSnow)
+                speed *= THIN_SNOW_SPEED_RATE;
+
+            const float step = speed * dt / length;
+            dx *= step;
+            dz *= step;
+
+            auto canMove = [&](const glm::vec3& to) {
+                if (!IsBlockedByWall(to, stats.bbox))
+                    return true;
+                if (!IsBlockedByWall(player.pos, stats.bbox))
+                    return false;
+
+                glm::ivec2 fromLow, fromHigh, toLow, toHigh;
+                cellRange(player.pos, fromLow, fromHigh);
+                cellRange(to, toLow, toHigh);
+                for (int gx = toLow.x; gx <= toHigh.x; ++gx) {
+                    for (int gz = toLow.y; gz <= toHigh.y; ++gz) {
+                        const bool alreadyInside = gx >= fromLow.x && gx <= fromHigh.x && gz >= fromLow.y && gz <= fromHigh.y;
+                        if (!alreadyInside && wallHeight[gx][gz] >= WALL_BLOCK_HEIGHT)
+                            return false;
+                    }
+                }
+                return true;
+            };
+
             glm::vec3 next = player.pos;
             next.x = std::clamp(player.pos.x + dx, PLAY_MIN_X + halfX, PLAY_MAX_X - halfX);
-            if (!IsBlockedByWall(next, stats.bbox))
+            if (canMove(next))
                 player.pos.x = next.x;
 
             next = player.pos;
             next.z = std::clamp(player.pos.z + dz, PLAY_MIN_Z[slot] + halfZ, PLAY_MAX_Z[slot] - halfZ);
-            if (!IsBlockedByWall(next, stats.bbox))
+            if (canMove(next))
                 player.pos.z = next.z;
 
             if (player.pos != before)
@@ -449,6 +488,13 @@ void Room::Update(ULONGLONG now, float dt)
     case ROOM_PLAYING:
         UpdateCharacters(now, dt);
         UpdateSnowballs(now, dt);
+
+        // [11.27] 경기 중 지급 시각이 되면 참가자에게 아이템을 지급한다.
+        if (state == ROOM_PLAYING && now >= nextItemMs) {
+            for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot)
+                GiveRandomItem(slot);
+            nextItemMs = now + ITEM_INTERVAL_MS;
+        }
         break;
     case ROOM_RESULT:
         if (now >= resultEndMS)
@@ -490,18 +536,22 @@ void Room::UseItem(int slot, ITEM_TYPE item)
         return;
 
     PlayerState& player = players[slot];
+    bool* effect;
+    STATUS_TYPE status;
     switch (item) {
     case ITEM_SHIELD:
-        if (player.shield)
-            return;
+        effect = &player.shield;
+        status = STATUS_SHIELD;
         break;
     case ITEM_POWER_UP:
-        if (player.powerUp)
-            return;
+        effect = &player.powerUp;
+        status = STATUS_POWER_UP;
         break;
     default:
         return;
     }
+    if (*effect)
+        return;
 
     ITEM_TYPE* const end = player.items + player.itemCount;
     ITEM_TYPE* const found = std::find(player.items, end, item);
@@ -511,6 +561,15 @@ void Room::UseItem(int slot, ITEM_TYPE item)
     // [11.23] 뒤의 아이템을 당겨서 빈칸 없이 보관한다.
     std::copy(found + 1, end, found);
     --player.itemCount;
+    *effect = true;
+
+    S2C_ItemUsed packet{};
+    packet.size = sizeof(packet);
+    packet.type = S2C_ITEM_USED;
+    packet.user_slot = static_cast<unsigned char>(slot);
+    packet.item = item;
+    Broadcast(&packet);
+    SendStatusChange(slot, status, 1.0f);
 }
 
 void Room::RemoveSnowball(Snowball& snowball)

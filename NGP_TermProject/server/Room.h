@@ -11,6 +11,7 @@ constexpr float GROUND_TOP = 0.5f;
 constexpr float WALL_STEP = 0.5f;
 constexpr float WALL_MAX_HEIGHT = 3.0f;
 constexpr float WALL_BLOCK_HEIGHT = 1.0f;
+constexpr float THIN_SNOW_SPEED_RATE = 0.5f;
 constexpr float GRAVITY = -9.8f;
 constexpr float SNOWBALL_RADIUS = 0.15f;
 constexpr float MIN_THROW_SPEED = 2.0f;
