@@ -113,7 +113,18 @@ void InputHandler::OnKeyUp(unsigned char key)
 // [11.20] 왼쪽 버튼을 누르면 차징하고, 떼면 던지기를 요청한다.
 void InputHandler::OnMouse(int button, int state)
 {
-    if (game == nullptr || game->GetState() != CLIENT_PLAYING || button != GLUT_LEFT_BUTTON) return;
+    if (game == nullptr || game->GetState() != CLIENT_PLAYING) return;
+
+    // [11.27] 오른쪽 버튼을 누르면 갖고 있는 아이템의 사용을 요청한다.
+    if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+        C2S_UseItem request{};
+        if (!game->TryGetHeldItem(request.item)) return;
+        request.type = C2S_USE_ITEM;
+        game->QueueRequest(&request, sizeof(request));
+        return;
+    }
+
+    if (button != GLUT_LEFT_BUTTON) return;
 
     if (state == GLUT_DOWN) {
         if (attackPressed) return; // 이미 차징을 등록했으면 같은 요청을 보내지 않는다.

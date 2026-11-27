@@ -25,6 +25,16 @@ struct ClientObject {
     ARM_STATE armState = ARM_IDLE;
 };
 
+// [11.27] 내 아이템 한 개를 보관한다.
+struct ClientInventory {
+    ITEM_TYPE item = ITEM_SHIELD;
+    bool hasItem = false; // 아이템 종류와 별개로 칸이 비었는지 기억한다.
+
+    bool Has(ITEM_TYPE requestedItem) const {
+        return hasItem && item == requestedItem;
+    }
+};
+
 // [11.4] 네트워크 기능을 사용하면서 클라이언트의 게임 상태를 관리한다.
 class GameClient {
 public:
@@ -49,6 +59,12 @@ public:
     int GetHP(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
         return hp[slot];
+    }
+    // [11.27] 아이템을 갖고 있으면 그 종류를 알려 준다.
+    bool TryGetHeldItem(ITEM_TYPE& item) const {
+        if (!inventory.hasItem) return false;
+        item = inventory.item;
+        return true;
     }
     bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
     float GetHitEffectStrength(int slot) const; // [11.25] 해당 자리의 피격 효과 세기를 알려 준다.
@@ -110,6 +126,7 @@ private:
     std::unordered_map<int, ClientObject> objects;
     int hp[MAX_ROOM_PLAYERS]{};
     ULONGLONG lastHitMs[MAX_ROOM_PLAYERS]{};
+    ClientInventory inventory{}; // [11.27] 내 아이템 보유 상태
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
     int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.

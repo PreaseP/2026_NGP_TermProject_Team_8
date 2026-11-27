@@ -8,6 +8,12 @@
 // [11.20] 서버의 발 높이를 모델과 카메라의 기준 높이로 맞춘다.
 constexpr float CHARACTER_RENDER_OFFSET_Y = 1.0f;
 
+// [11.30] 서버와 주고받는 아이템 종류인지 확인한다.
+static bool IsValidItemType(ITEM_TYPE item)
+{
+    return item == ITEM_SHIELD || item == ITEM_POWER_UP;
+}
+
 // [11.4] 게임 클라이언트의 시작 상태와 네트워크 사용을 준비한다.
 bool GameClient::Init(const char* ip)
 {
@@ -281,6 +287,25 @@ bool GameClient::QueueRequest(const void* packet, int packetSize)
             return false;
         }
         break;
+
+    // [11.27] 경기 중 실제로 갖고 있는 아이템만 사용 요청에 넣는다.
+    case C2S_USE_ITEM: {
+        if (currentState != CLIENT_PLAYING || packetSize != sizeof(C2S_UseItem)) {
+            errorMessage = "Invalid use item request.";
+            return false;
+        }
+
+        const ITEM_TYPE item = static_cast<ITEM_TYPE>(request[offsetof(C2S_UseItem, item)]);
+        if (!IsValidItemType(item)) {
+            errorMessage = "Invalid item type.";
+            return false;
+        }
+        if (!inventory.Has(item)) {
+            errorMessage = "Item is not in inventory.";
+            return false;
+        }
+        break;
+    }
 
     default:
         break;
