@@ -371,6 +371,7 @@ void GameClient::PollNetwork()
 void GameClient::ClearWorld()
 {
     objects.clear();
+    inventory = {}; // [11.30] 이전 경기의 아이템을 비운다.
     for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
         hp[slot] = 0;
         // [11.25] 이전 경기의 피격 표시를 지운다.
@@ -521,6 +522,34 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             lastHitMs[hit.target_slot] = GetTickCount64();
         }
         targetHp = hit.hp;
+        return;
+    }
+
+    // [11.30] 서버가 내게 지급한 아이템을 빈 칸에 넣는다.
+    if (packet[1] == S2C_ITEM_GET) {
+        S2C_ItemGet received{};
+        std::memcpy(&received, packet, sizeof(received));
+        if (!IsValidItemType(received.item)) {
+            HandleDisconnect();
+            return;
+        }
+        if (!inventory.hasItem) {
+            inventory = { received.item, true };
+        }
+        return;
+    }
+
+    // [11.30] 내가 보유한 아이템의 사용이 확인되면 칸을 비운다.
+    if (packet[1] == S2C_ITEM_USED) {
+        S2C_ItemUsed used{};
+        std::memcpy(&used, packet, sizeof(used));
+        if (used.user_slot >= MAX_ROOM_PLAYERS || !IsValidItemType(used.item)) {
+            HandleDisconnect();
+            return;
+        }
+        if (used.user_slot == mySlot && inventory.Has(used.item)) {
+            inventory = {};
+        }
         return;
     }
 
@@ -688,10 +717,12 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         return;
     }
     // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.
+    // [11.30] 아이템 지급과 사용 알림도 월드 처리에 맡긴다.
     if (currentState == CLIENT_PLAYING &&
         (packet[1] == S2C_ADD_OBJECT || packet[1] == S2C_MOVE_OBJECT ||
          packet[1] == S2C_REMOVE_OBJECT || packet[1] == S2C_STATUS_CHANGE ||
-         packet[1] == S2C_HIT)) {
+         packet[1] == S2C_HIT || packet[1] == S2C_ITEM_GET ||
+         packet[1] == S2C_ITEM_USED)) {
         ApplyWorldPacket(packet);
         return;
     }
