@@ -11,6 +11,7 @@
 #include <gl/glm/ext.hpp>
 #include <gl/glm/gtc/matrix_transform.hpp>
 #include <vector>
+#include <utility>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -78,6 +79,7 @@ static Steve::Character* matchSteve[MAX_ROOM_PLAYERS]{};
 static Alex::Character* matchAlex[MAX_ROOM_PLAYERS]{};
 // [11.23] 모든 네트워크 눈덩이는 같은 구 모양으로 그린다.
 static Snowball* matchSnowball = nullptr;
+static Snow matchSnowWalls("snow.png"); // [11.26] 경기에서 받은 눈 벽을 그린다.
 static GLuint landingMarkerVao = 0, landingMarkerVbo = 0;
 static bool matchSceneInitialized = false;
 
@@ -105,6 +107,7 @@ void ClearMatchScene() {
     // [11.23] 경기 화면을 정리할 때 눈덩이의 그래픽 자원도 비운다.
     delete matchSnowball;
     matchSnowball = nullptr;
+    matchSnowWalls.cleanup(); // [11.26] 경기 전환과 창 종료 때 눈 벽을 정리한다.
     // [11.24] 경기 화면과 함께 조준점 그리기 자료도 비운다.
     glDeleteVertexArrays(1, &landingMarkerVao);
     glDeleteBuffers(1, &landingMarkerVbo);
@@ -149,6 +152,18 @@ static bool faceBuffersInitialized = false;
 static GLuint steveFaceTextureID = 0;
 static GLuint alexFaceTextureID = 0;
 static bool faceTexturesLoaded = false;
+
+// [11.25] 경기 HUD에서 사용할 PNG를 한 번만 불러와 함께 사용한다.
+struct GameUITextures {
+    GLuint stevePortrait = 0;
+    GLuint alexPortrait = 0;
+    GLuint fullHeart = 0;
+    GLuint emptyHeart = 0;
+    GLuint fullHeartFlash = 0;
+    GLuint emptyHeartFlash = 0;
+    GLuint itemSlot = 0;
+};
+static GameUITextures gameUITextures;
 
 // [변경 1] 창과 그래픽 준비를 맡는 함수 선언. argc는 GLUT가 갱신할 수 있어 참조로 받는다.
 bool InitOpenGL(int& argc, char** argv);
@@ -235,6 +250,16 @@ bool InitOpenGL(int& argc, char** argv)
 
 	// 타이틀 화면 초기화
 	titleScreen.initialize();
+	// [11.25] 경기 화면 위에 올릴 이미지도 미리 불러온다.
+	gameUITextures.stevePortrait = loadTexture("Images/Hud/portrait_steve.png");
+	gameUITextures.alexPortrait = loadTexture("Images/Hud/portrait_alex.png");
+	gameUITextures.fullHeart = loadTexture("Images/Hud/heart_full.png");
+	// [11.25] 줄어든 체력을 표시할 빈 하트도 준비한다.
+	gameUITextures.emptyHeart = loadTexture("Images/Hud/heart_empty.png");
+	// [11.25] 피격으로 깜빡일 때 쓸 흰 테두리 하트를 준비한다.
+	gameUITextures.fullHeartFlash = loadTexture("Images/Hud/heart_full_flash.png");
+	gameUITextures.emptyHeartFlash = loadTexture("Images/Hud/heart_empty_flash.png");
+	gameUITextures.itemSlot = loadTexture("Images/Hud/item_slot.png");
 	return true;
 }
 
@@ -272,6 +297,12 @@ void OnExit()
 	glDeleteBuffers(1, &faceVBO);
 	glDeleteTextures(1, &steveFaceTextureID);
 	glDeleteTextures(1, &alexFaceTextureID);
+	// [11.25] 창이 닫힐 때 HUD 이미지도 정리한다.
+	const GLuint textureIds[] = { gameUITextures.stevePortrait, gameUITextures.alexPortrait,
+		gameUITextures.fullHeart, gameUITextures.emptyHeart, gameUITextures.fullHeartFlash,
+		gameUITextures.emptyHeartFlash, gameUITextures.itemSlot };
+	glDeleteTextures(7, textureIds);
+	gameUITextures = {};
 	faceVAO = faceVBO = steveFaceTextureID = alexFaceTextureID = 0;
 	faceBuffersInitialized = faceTexturesLoaded = false;
 
@@ -476,6 +507,73 @@ void renderCharacterFace(GLuint textureID, float x, float y, float size, int scr
 // 	renderCharacterFace(alexFaceTextureID, alexX, alexY, faceSize, winW - winW / 2, winH);
 // 	glViewport(0, 0, winW, winH);
 // }
+
+// [11.25] 경기 화면 위에 내 초상화, 하트 5개, 빈 아이템 틀을 그린다.
+static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHeight)
+{
+    initializeFaceBuffers();
+
+    // [11.25] 1200×675 배치를 기준으로 창 크기에 맞춰 같은 비율로 줄인다.
+    const float scale = std::min(winWidth / 1200.0f, winHeight / 675.0f);
+    const glm::mat4 projection = glm::ortho(0.0f, float(winWidth), 0.0f, float(winHeight));
+    const glm::mat4 view(1.0f);
+    const GLint modelLoc = glGetUniformLocation(shaderProgramID, "model");
+    const GLint uiModeLoc = glGetUniformLocation(shaderProgramID, "uiMode");
+
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLint srcRgb, dstRgb, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projection[0][0]);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "view"), 1, GL_FALSE, &view[0][0]);
+    glUniform1i(uiModeLoc, 1);
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 1);
+    glUniform4f(glGetUniformLocation(shaderProgramID, "uiUVRect"), 0.0f, 0.0f, 1.0f, 1.0f);
+    glUniform4f(glGetUniformLocation(shaderProgramID, "uiColor"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(faceVAO);
+
+    // [11.25] 왼쪽 위 기준 위치를 기존 사각형의 중심 좌표로 바꾼다.
+    const auto drawIcon = [&](GLuint texture, float left, float top, float size) {
+        const float halfSize = size * scale / 2.0f;
+        glm::mat4 model = glm::translate(glm::mat4(1.0f),
+            glm::vec3(left * scale + halfSize, winHeight - top * scale - halfSize, 0.0f));
+        model = glm::scale(model, glm::vec3(halfSize, halfSize, 1.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    };
+
+    const GLuint portrait = character == CHAR_STEVE ? gameUITextures.stevePortrait : gameUITextures.alexPortrait;
+    drawIcon(portrait, 22.0f, 24.0f, 96.0f);
+    // [11.25] 첫 하트의 위치를 맞추고 하트끼리 가깝게 붙인다.
+    constexpr float heartSize = 56.0f;
+    constexpr float heartSpacing = 55.0f;
+    constexpr int heartCount = 5;
+    constexpr int hpPerHeart = MAX_HP / heartCount;
+    const bool flashHearts = gameClient.ShouldFlashHearts();
+    const GLuint fullHeart = flashHearts ? gameUITextures.fullHeartFlash : gameUITextures.fullHeart;
+    const GLuint emptyHeart = flashHearts ? gameUITextures.emptyHeartFlash : gameUITextures.emptyHeart;
+    for (int heart = 0; heart < heartCount; ++heart) {
+        // [11.25] 이 칸에 남은 체력이 있으면 가득 찬 하트를 그린다.
+        const GLuint texture = hp > heart * hpPerHeart ? fullHeart : emptyHeart;
+        drawIcon(texture, 142.5f + heart * heartSpacing, 40.0f, heartSize);
+    }
+    drawIcon(gameUITextures.itemSlot, 22.0f, 134.0f, 96.0f);
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUniform1i(uiModeLoc, 0);
+    glBlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+    if (!blendEnabled) glDisable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+}
 
 void initializeGame() {
 	lightManager.setupDefaultLighting();
@@ -993,9 +1091,10 @@ GLvoid Drawscene()
         const int winW = std::max(1, glutGet(GLUT_WINDOW_WIDTH));
         const int winH = std::max(1, glutGet(GLUT_WINDOW_HEIGHT));
         glViewport(0, 0, winW, winH);
-        const ClientObject* me = gameClient.GetObject(gameClient.GetMySlot());
+        const int mySlot = gameClient.GetMySlot();
+        const ClientObject* me = gameClient.GetObject(mySlot);
         glm::mat4 view(1.0f), projection(1.0f);
-        if (gameClient.GetMySlot() == 0) {
+        if (mySlot == 0) {
             steveCamera.updateFromCharacterPosition(me->renderPos);
             cameraPos = steveCamera.getPosition();
             view = steveCamera.getViewMatrix();
@@ -1007,7 +1106,18 @@ GLvoid Drawscene()
             view = alexCamera.getViewMatrix();
             projection = alexCamera.getProjectionMatrix(static_cast<float>(winW), static_cast<float>(winH));
         }
+        // [11.25] 맞은 직후 3D 화면을 살짝 뒤로 밀고 기울인다.
+        const float hitStrength = gameClient.GetHitEffectStrength(mySlot);
+        if (hitStrength > 0.0f) {
+            glm::mat4 recoil = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -0.10f * hitStrength)); //recoil 뒷걸음질
+            recoil = glm::rotate(recoil, glm::radians(-3.0f) * hitStrength, glm::vec3(1.0f, 0.0f, 0.0f));
+            recoil = glm::rotate(recoil, glm::radians(4.0f) * hitStrength, glm::vec3(0.0f, 0.0f, 1.0f));
+            view = recoil * view;
+            cameraPos = glm::vec3(glm::inverse(view)[3]);
+        }
         renderWorld(view, projection);
+        // [11.25] 맵과 캐릭터를 그린 다음 HUD를 화면 위에 올린다.
+        DrawGameUI(me->character, gameClient.GetHP(mySlot), winW, winH);
 		break;
 	}
 
@@ -1203,28 +1313,40 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
     if (gameClient.GetState() == CLIENT_PLAYING) {
         if (viewPosLoc != -1) glUniform3fv(viewPosLoc, 1, &cameraPos[0]);
         if (useTextureLoc != -1) glUniform1i(useTextureLoc, 1);
+        const int mySlot = gameClient.GetMySlot();
+        const GLint hitTintLoc = glGetUniformLocation(shaderProgramID, "hitTint");
         for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
             const ClientObject* player = gameClient.GetObject(slot);
             const float facing = slot == 0 ? 0.0f : 180.0f;
+            const bool drawPlayer = slot != mySlot;
+            // [11.25] 맞은 캐릭터를 그릴 동안에만 붉은색을 섞는다.
+            glUniform1f(hitTintLoc, drawPlayer ? 0.65f * gameClient.GetHitEffectStrength(slot) : 0.0f);
             if (matchSteve[slot]) {
                 matchSteve[slot]->pos = player->renderPos;
-                if (slot != gameClient.GetMySlot()) matchSteve[slot]->draw(modelLoc, facing);
+                if (drawPlayer) matchSteve[slot]->draw(modelLoc, facing);
             }
             if (matchAlex[slot]) {
                 matchAlex[slot]->pos = player->renderPos;
-                if (slot != gameClient.GetMySlot()) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
+                if (drawPlayer) matchAlex[slot]->draw(modelLoc, facing - 180.0f);
             }
         }
+        glUniform1f(hitTintLoc, 0.0f);
+        std::vector<SnowWallVisual> walls;
         // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
         for (const auto& entry : gameClient.GetObjects()) {
             const ClientObject& object = entry.second;
-            if (object.type != OBJ_SNOWBALL) continue;
-            matchSnowball->setPosition(object.renderPos);
-            matchSnowball->render(shaderProgramID);
+            if (object.type == OBJ_SNOWBALL) {
+                matchSnowball->setPosition(object.renderPos);
+                matchSnowball->render(shaderProgramID);
+            } else if (object.type == OBJ_SNOW_WALL) {
+                // [11.26] 이번 프레임에 표시할 눈 벽의 중심과 높이를 모은다.
+                walls.push_back({ object.renderPos, object.height });
+            }
         }
+        matchSnowWalls.setWallVisuals(std::move(walls));
+        matchSnowWalls.render(shaderProgramID);
         // [11.24] 내 차징 중에만 예상 착지점을 바닥에 그린다.
         float chargeSeconds;
-        const int mySlot = gameClient.GetMySlot();
         if (gameClient.TryGetChargeSeconds(chargeSeconds)) {
             DrawLandingMarker(PredictSnowballMarker(*gameClient.GetObject(mySlot), mySlot, chargeSeconds));
         }

@@ -14,6 +14,10 @@ struct ClientObject {
     CHARACTER_TYPE character = CHAR_NONE;
     unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
     bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
+    float height = 0.0f; // [11.26] 눈 벽의 현재 높이
+    float targetHeight = 0.0f; // [11.26] 눈 벽의 목표 높이
+    float startHeight = 0.0f; // [11.26] 높이가 바뀌기 시작할 때 보이던 높이
+    float wallBaseY = 0.0f; // [11.26] 고정할 눈 벽의 밑면 위치
     glm::vec3 renderPos{0.0f};
     glm::vec3 prevPos{0.0f};
     glm::vec3 targetPos{0.0f};
@@ -46,6 +50,8 @@ public:
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
         return hp[slot];
     }
+    bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
+    float GetHitEffectStrength(int slot) const; // [11.25] 해당 자리의 피격 효과 세기를 알려 준다.
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
     const RoomPlayerInfo* GetRoomPlayer(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
@@ -103,6 +109,7 @@ private:
     S2C_GameStartResult gameStartResult{};
     std::unordered_map<int, ClientObject> objects;
     int hp[MAX_ROOM_PLAYERS]{};
+    ULONGLONG lastHitMs[MAX_ROOM_PLAYERS]{};
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]
     int selectedRoomIndex = 0; // [11.11] 로비에서는 첫 번째 방부터 선택한다.

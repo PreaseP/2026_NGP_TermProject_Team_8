@@ -13,6 +13,7 @@ uniform vec3 viewPos;
 uniform bool lightingEnabled;
 uniform bool useTexture;
 uniform sampler2D texture1;
+uniform float hitTint; // [11.25] 피격된 캐릭터에 섞을 붉은색의 세기
 // [11.7] 메뉴에만 투명도와 색을 적용한다. 기존 게임 출력은 그대로 둔다.
 uniform bool uiMode;
 uniform vec4 uiColor;
@@ -53,6 +54,9 @@ void main ()
 	vec3 specular = specularLight * lightColor;
 
 	vec3 result = (ambient + diffuse + specular) * objectColor;
+	if (hitTint > 0.0) {
+		result = mix(clamp(result, 0.0, 1.0), vec3(1.0, 0.12, 0.09), hitTint);
+	}
 
 	FragColor = vec4(result, 1.0f);
 }
