@@ -13,7 +13,7 @@ constexpr int MAX_ROOMS = 3;     // 서버 시작 시 만들어 두는 방 수
 constexpr int MAX_ROOM_PLAYERS = 2;     // 방 하나의 정원 (1:1)
 constexpr int MAX_NAME_LEN = 16;    // 닉네임 (널 문자 포함, 영문·숫자)
 constexpr int MAX_HP = 100;
-constexpr int MAX_ITEMS = 2;     // 한 번에 보유할 수 있는 아이템 수
+constexpr int MAX_ITEMS = 1;     // 한 번에 보유할 수 있는 아이템 수
 constexpr int ITEM_INTERVAL_MS = 20000; // 랜덤 아이템 지급 주기
 constexpr int BUF_SIZE = 256;   // 패킷 최대 크기 (size가 1바이트)
 

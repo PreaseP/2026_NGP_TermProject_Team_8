@@ -488,6 +488,13 @@ void Room::Update(ULONGLONG now, float dt)
     case ROOM_PLAYING:
         UpdateCharacters(now, dt);
         UpdateSnowballs(now, dt);
+
+        // [11.27] 경기 중 지급 시각이 되면 참가자에게 아이템을 지급한다.
+        if (state == ROOM_PLAYING && now >= nextItemMs) {
+            for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot)
+                GiveRandomItem(slot);
+            nextItemMs = now + ITEM_INTERVAL_MS;
+        }
         break;
     case ROOM_RESULT:
         if (now >= resultEndMS)
