@@ -42,6 +42,10 @@ public:
     int GetPreviewCharacter(int serverCharacter) const;
     bool IsMouseOverCharacterConfirm(int x, int y, int width, int height) const;
     bool IsMouseOverGameStartButton(int x, int y, int width, int height) const;
+    // [11.27] HUD에서도 기존 글자 텍스처를 사용한다.
+    // [11.14] centerX를 생략하면 기존처럼 화면 중앙에 표시한다.
+    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b,
+        float size = 18.0f, float centerX = 600.0f) const;
     void PlayNameError(); // [11.7] 버튼을 잠깐 붉게 만들고 좌우로 흔든다.
 
 private:
@@ -54,9 +58,6 @@ private:
     void drawUIQuad(GLuint shader, float x, float y, float w, float h,
         GLuint texture, const glm::vec4& color, const glm::vec4& uv = glm::vec4(0, 0, 1, 1)) const;
     void panel(GLuint shader, float x, float y, float w, float h, float r, float g, float b, float a) const;
-    // [11.14] centerX를 생략하면 기존처럼 화면 중앙에 표시한다.
-    void centeredText(GLuint shader, const std::string& text, float y, float r, float g, float b,
-        float size = 18.0f, float centerX = 600.0f) const;
     GLuint fontTextureId = 0;
     float startScale() const; // [11.7] 표시와 클릭 검사에 같은 크기를 사용한다.
     float startErrorStrength() const; // [11.7] 남은 오류 효과의 세기: 1에서 0으로 줄어든다.

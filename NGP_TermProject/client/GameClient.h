@@ -66,6 +66,7 @@ public:
         item = inventory.item;
         return true;
     }
+    int GetItemGrantRemainingMs() const; // [11.27] 다음 지급까지의 예상 남은 시간
     bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
     float GetHitEffectStrength(int slot) const; // [11.25] 해당 자리의 피격 효과 세기를 알려 준다.
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
@@ -118,6 +119,7 @@ private:
 
     CLIENT_STATE currentState = CLIENT_LOGIN;
     ULONGLONG lastTickMs = 0;
+    ULONGLONG itemGrantCycleStartMs = 0; // [11.27] 경기 시작 또는 마지막 지급 알림을 받은 시각
     int mySessionId = -1; //서버가 구분하기위한 번호
     int myRoomId = -1; // 내가 들어간 방 번호
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호

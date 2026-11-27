@@ -372,6 +372,7 @@ void GameClient::ClearWorld()
 {
     objects.clear();
     inventory = {}; // [11.30] 이전 경기의 아이템을 비운다.
+    itemGrantCycleStartMs = 0; // [11.27] 이전 경기의 지급 시간도 비운다.
     for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
         hp[slot] = 0;
         // [11.25] 이전 경기의 피격 표시를 지운다.
@@ -381,6 +382,14 @@ void GameClient::ClearWorld()
     for (CHARACTER_TYPE& character : gameStartResult.character) {
         character = CHAR_NONE;
     }
+}
+
+// [11.27] 경기 시작 또는 마지막 지급 알림부터 20초 주기를 계산한다.
+int GameClient::GetItemGrantRemainingMs() const
+{
+    if (currentState != CLIENT_PLAYING) return 0;
+    const ULONGLONG elapsed = GetTickCount64() - itemGrantCycleStartMs;
+    return ITEM_INTERVAL_MS - static_cast<int>(elapsed % ITEM_INTERVAL_MS);
 }
 
 bool GameClient::ShouldFlashHearts() const // 이번 프레임에 하트의 흰 테두리를 켤지 검사
@@ -423,6 +432,7 @@ void GameClient::HandleGameStartResult(const S2C_GameStartResult& result)
     }
     ClearWorld();
     gameStartResult = result;
+    itemGrantCycleStartMs = GetTickCount64(); // [11.27] 서버 시각을 받기 전까지 쓸 표시 기준
     for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
         ClientObject player{};
         player.objectId = slot;
@@ -533,6 +543,8 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             HandleDisconnect();
             return;
         }
+        // [11.27] 실제 지급 알림을 받으면 다음 20초 주기를 여기서 다시 맞춘다.
+        itemGrantCycleStartMs = GetTickCount64();
         if (!inventory.hasItem) {
             inventory = { received.item, true };
         }

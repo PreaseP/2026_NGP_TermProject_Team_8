@@ -578,12 +578,38 @@ static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHe
 
     // [11.30] 보유한 아이템의 아이콘을 칸 가운데에 그린다.
     ITEM_TYPE heldItem{};
-    if (gameClient.TryGetHeldItem(heldItem)) {
+    const bool hasItem = gameClient.TryGetHeldItem(heldItem);
+    if (hasItem) {
         constexpr float iconInset = 8.0f;
         const GLuint icon = heldItem == ITEM_SHIELD ? gameUITextures.itemShield : gameUITextures.itemPowerUp;
         drawIcon(icon, itemSlotLeft + iconInset, itemSlotTop + iconInset, itemSlotSize - 2.0f * iconInset);
     }
 
+    // [11.27] 지급 주기를 작은 숫자와 차오르는 막대로 표시한다.
+    const int remainingMs = gameClient.GetItemGrantRemainingMs();
+    const int seconds = (remainingMs + 999) / 1000;
+    const float progress = 1.0f - remainingMs / static_cast<float>(ITEM_INTERVAL_MS);
+    const glm::vec4 gaugeColor = seconds <= 3
+        ? glm::vec4(0.57f, 0.91f, 0.77f, 1.0f)
+        : glm::vec4(0.90f, 0.66f, 0.32f, 1.0f);
+    const auto drawPanel = [&](float left, float top, float width, float height, const glm::vec4& color) {
+        glm::mat4 model = glm::translate(glm::mat4(1.0f),
+            glm::vec3((left + width / 2.0f) * scale, winHeight - (top + height / 2.0f) * scale, 0.0f));
+        model = glm::scale(model, glm::vec3(width * scale / 2.0f, height * scale / 2.0f, 1.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+        glUniform4fv(glGetUniformLocation(shaderProgramID, "uiColor"), 1, &color[0]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    };
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 0);
+    drawPanel(18.0f, 236.0f, 104.0f, 42.0f, glm::vec4(0.08f, 0.09f, 0.11f, 0.92f));
+    drawPanel(26.0f, 265.0f, 88.0f, 5.0f, glm::vec4(0.23f, 0.25f, 0.29f, 1.0f));
+    drawPanel(26.0f, 265.0f, 88.0f * progress, 5.0f, gaugeColor);
+
+    // [11.27] 기존 메뉴의 영문 글꼴을 HUD 크기에 맞춰 재사용한다.
+    const glm::mat4 textProjection = glm::ortho(0.0f, float(winWidth), float(winHeight), 0.0f);
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &textProjection[0][0]);
+    titleScreen.centeredText(shaderProgramID, "NEXT " + std::to_string(seconds) + "s",
+        258.0f * scale, 0.95f, 0.96f, 0.98f, 18.0f * scale, 70.0f * scale);
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
     glUniform1i(uiModeLoc, 0);
