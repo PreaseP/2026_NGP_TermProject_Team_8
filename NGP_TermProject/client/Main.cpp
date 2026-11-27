@@ -162,6 +162,8 @@ struct GameUITextures {
     GLuint fullHeartFlash = 0;
     GLuint emptyHeartFlash = 0;
     GLuint itemSlot = 0;
+    GLuint itemShield = 0; // [11.30] 방어막 아이콘
+    GLuint itemPowerUp = 0; // [11.30] 공격 강화 아이콘
 };
 static GameUITextures gameUITextures;
 
@@ -196,7 +198,7 @@ void checkAllSnowballCollisions();
 
 void initializeFaceBuffers();
 void loadFaceTextures();
-GLuint loadTexture(const char* path);
+GLuint loadTexture(const char* path, GLint minFilter = GL_LINEAR);
 void renderCharacterFace(GLuint textureID, float x, float y, float size, int screenWidth, int screenHeight);
 // void drawCharacterFaces(int winW, int winH);
 
@@ -260,6 +262,9 @@ bool InitOpenGL(int& argc, char** argv)
 	gameUITextures.fullHeartFlash = loadTexture("Images/Hud/heart_full_flash.png");
 	gameUITextures.emptyHeartFlash = loadTexture("Images/Hud/heart_empty_flash.png");
 	gameUITextures.itemSlot = loadTexture("Images/Hud/item_slot.png");
+	// [11.30] HUD 크기로 줄일 때 밉맵으로 아이콘을 그린다.
+	gameUITextures.itemShield = loadTexture("Images/Hud/item_shield.png", GL_LINEAR_MIPMAP_LINEAR);
+	gameUITextures.itemPowerUp = loadTexture("Images/Hud/item_power_up.png", GL_LINEAR_MIPMAP_LINEAR);
 	return true;
 }
 
@@ -300,8 +305,9 @@ void OnExit()
 	// [11.25] 창이 닫힐 때 HUD 이미지도 정리한다.
 	const GLuint textureIds[] = { gameUITextures.stevePortrait, gameUITextures.alexPortrait,
 		gameUITextures.fullHeart, gameUITextures.emptyHeart, gameUITextures.fullHeartFlash,
-		gameUITextures.emptyHeartFlash, gameUITextures.itemSlot };
-	glDeleteTextures(7, textureIds);
+		gameUITextures.emptyHeartFlash, gameUITextures.itemSlot, gameUITextures.itemShield,
+		gameUITextures.itemPowerUp };
+	glDeleteTextures(static_cast<GLsizei>(sizeof(textureIds) / sizeof(textureIds[0])), textureIds);
 	gameUITextures = {};
 	faceVAO = faceVBO = steveFaceTextureID = alexFaceTextureID = 0;
 	faceBuffersInitialized = faceTexturesLoaded = false;
@@ -358,7 +364,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-GLuint loadTexture(const char* path)
+GLuint loadTexture(const char* path, GLint minFilter)
 {
 	GLuint textureID;
 	glGenTextures(1, &textureID);
@@ -367,7 +373,7 @@ GLuint loadTexture(const char* path)
 	// 텍스처 파라미터 설정
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	int width, height, channels;
@@ -565,7 +571,18 @@ static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHe
         const GLuint texture = hp > heart * hpPerHeart ? fullHeart : emptyHeart;
         drawIcon(texture, 142.5f + heart * heartSpacing, 40.0f, heartSize);
     }
-    drawIcon(gameUITextures.itemSlot, 22.0f, 134.0f, 96.0f);
+    constexpr float itemSlotLeft = 22.0f;
+    constexpr float itemSlotTop = 134.0f;
+    constexpr float itemSlotSize = 96.0f;
+    drawIcon(gameUITextures.itemSlot, itemSlotLeft, itemSlotTop, itemSlotSize);
+
+    // [11.30] 보유한 아이템의 아이콘을 칸 가운데에 그린다.
+    ITEM_TYPE heldItem{};
+    if (gameClient.TryGetHeldItem(heldItem)) {
+        constexpr float iconInset = 8.0f;
+        const GLuint icon = heldItem == ITEM_SHIELD ? gameUITextures.itemShield : gameUITextures.itemPowerUp;
+        drawIcon(icon, itemSlotLeft + iconInset, itemSlotTop + iconInset, itemSlotSize - 2.0f * iconInset);
+    }
 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
