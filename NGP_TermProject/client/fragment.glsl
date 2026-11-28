@@ -12,6 +12,7 @@ uniform vec3 vColor;
 uniform vec3 viewPos;
 uniform bool lightingEnabled;
 uniform bool useTexture;
+uniform bool textureAlphaCutout; // [12.1] 방패 PNG의 투명한 부분을 건너뛴다.
 uniform sampler2D texture1;
 uniform float hitTint; // [11.25] 피격된 캐릭터에 섞을 붉은색의 세기
 // [11.7] 메뉴에만 투명도와 색을 적용한다. 기존 게임 출력은 그대로 둔다.
@@ -28,7 +29,9 @@ void main ()
 	vec3 objectColor;
 	
 	if (useTexture) {
-		objectColor = texture(texture1, TexCoord).rgb;
+		vec4 texel = texture(texture1, TexCoord);
+		if (textureAlphaCutout && texel.a < 0.5) discard;
+		objectColor = texel.rgb;
 	} else {
 		objectColor = vColor;
 	}

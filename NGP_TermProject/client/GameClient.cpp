@@ -377,6 +377,7 @@ void GameClient::ClearWorld()
         hp[slot] = 0;
         // [11.25] 이전 경기의 피격 표시를 지운다.
         lastHitMs[slot] = 0;
+        lastShieldBlockMs[slot] = 0; // [12.1] 이전 경기에 막았던 기록을 지운다.
     }
     gameStartResult = {};
     for (CHARACTER_TYPE& character : gameStartResult.character) {
@@ -522,9 +523,14 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
     if (packet[1] == S2C_HIT) {
         S2C_Hit hit{};
         std::memcpy(&hit, packet, sizeof(hit));
-        if (hit.target_slot >= MAX_ROOM_PLAYERS || hit.hp < 0 || hit.hp > MAX_HP) {
+        const unsigned char blockedValue = packet[offsetof(S2C_Hit, blocked)];
+        if (hit.target_slot >= MAX_ROOM_PLAYERS || hit.hp < 0 || hit.hp > MAX_HP || blockedValue > 1) {
             HandleDisconnect();
             return;
+        }
+        // [12.1] 방패로 막았다는 응답이 오면 흰 고리를 시작할 시각을 저장한다.
+        if (hit.blocked) {
+            lastShieldBlockMs[hit.target_slot] = GetTickCount64();
         }
         int& targetHp = hp[hit.target_slot];
         // [11.25] 체력이 줄어든 자리의 피격 시각을 기록한다.
@@ -593,8 +599,8 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             return;
         }
 
-        // [12.1] 서버가 알려 준 자리의 공격 강화를 켜거나 끈다.
-        if (state.status == STATUS_POWER_UP) {
+        // [12.1] 서버가 알려 준 자리의 방패 또는 공격 강화를 켜거나 끈다.
+        if (state.status == STATUS_SHIELD || state.status == STATUS_POWER_UP) {
             if (state.object_id < 0 || state.object_id >= MAX_ROOM_PLAYERS ||
                 (state.value != 0.0f && state.value != 1.0f)) {
                 HandleDisconnect();
@@ -604,7 +610,13 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             const auto found = objects.find(state.object_id);
             if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
 
-            found->second.powerUpActive = (state.value == 1.0f);
+            ClientObject& player = found->second;
+            const bool active = (state.value == 1.0f);
+            if (state.status == STATUS_SHIELD) {
+                player.shieldActive = active;
+            } else {
+                player.powerUpActive = active;
+            }
             return;
         }
 

@@ -15,6 +15,7 @@ struct ClientObject {
     unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
     bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
     bool powerUpActive = false; // [12.1] 플레이어가 다음 눈덩이에 쓸 공격 강화를 가지고 있는지 저장한다.
+    bool shieldActive = false; // [12.1] 플레이어의 방패가 켜져 있는지 저장한다.
     float height = 0.0f; // [11.26] 눈 벽의 현재 높이
     float targetHeight = 0.0f; // [11.26] 눈 벽의 목표 높이
     float startHeight = 0.0f; // [11.26] 높이가 바뀌기 시작할 때 보이던 높이
@@ -70,6 +71,11 @@ public:
     int GetItemGrantRemainingMs() const; // [11.27] 다음 지급까지의 예상 남은 시간
     bool ShouldFlashHearts() const; // [11.25] 하트의 흰 테두리를 그릴 때인지 알려 준다.
     float GetHitEffectStrength(int slot) const; // [11.25] 해당 자리의 피격 효과 세기를 알려 준다.
+    // [12.1] 이 자리의 방패가 마지막으로 공격을 막은 시각이다.
+    ULONGLONG GetLastShieldBlockMs(int slot) const {
+        if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return 0;
+        return lastShieldBlockMs[slot];
+    }
     // [11.12] 화면에서 읽을 자리의 참가자 정보를 돌려준다.
     const RoomPlayerInfo* GetRoomPlayer(int slot) const {
         if (slot < 0 || slot >= MAX_ROOM_PLAYERS) return nullptr;
@@ -129,6 +135,7 @@ private:
     std::unordered_map<int, ClientObject> objects;
     int hp[MAX_ROOM_PLAYERS]{};
     ULONGLONG lastHitMs[MAX_ROOM_PLAYERS]{};
+    ULONGLONG lastShieldBlockMs[MAX_ROOM_PLAYERS]{}; // [12.1] 방패가 공격을 막은 시각
     ClientInventory inventory{}; // [11.27] 내 아이템 보유 상태
     RoomSummary rooms[MAX_ROOMS]{}; // [11.10] 서버에서 받은 방 목록
     int roomCount = 0; // [11.10]

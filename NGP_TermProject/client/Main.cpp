@@ -82,6 +82,17 @@ static Snowball* matchSnowball = nullptr;
 static Snow matchSnowWalls("snow.png"); // [11.26] 경기에서 받은 눈 벽을 그린다.
 static GLuint landingMarkerVao = 0, landingMarkerVbo = 0;
 static bool matchSceneInitialized = false;
+static Part matchShield; // [12.1] 두 플레이어가 같은 방패 모양을 사용한다.
+static Part shieldBlockRing; // [12.1] 방패가 공격을 막을 때 그릴 고리
+
+static void ReleasePart(Part& part)
+{
+    glDeleteVertexArrays(1, &part.vao);
+    glDeleteBuffers(1, &part.vbo);
+    glDeleteBuffers(1, &part.nbo);
+    glDeleteBuffers(1, &part.tbo);
+    part = {};
+}
 
 template<class CharacterType>
 void ReleaseCharacter(CharacterType*& character) {
@@ -89,10 +100,7 @@ void ReleaseCharacter(CharacterType*& character) {
     for (Part* part : { &character->gBody, &character->gHead,
         &character->gArmL, &character->gArmR, &character->gLegL,
         &character->gLegR, &character->gBoundingBox }) {
-        glDeleteVertexArrays(1, &part->vao);
-        glDeleteBuffers(1, &part->vbo);
-        glDeleteBuffers(1, &part->nbo);
-        glDeleteBuffers(1, &part->tbo);
+        ReleasePart(*part);
     }
     glDeleteTextures(1, &character->textureID);
     delete character;
@@ -108,6 +116,8 @@ void ClearMatchScene() {
     delete matchSnowball;
     matchSnowball = nullptr;
     matchSnowWalls.cleanup(); // [11.26] 경기 전환과 창 종료 때 눈 벽을 정리한다.
+    ReleasePart(matchShield); // [12.1] 경기 화면과 함께 방패 모양도 정리한다.
+    ReleasePart(shieldBlockRing);
     // [11.24] 경기 화면과 함께 조준점 그리기 자료도 비운다.
     glDeleteVertexArrays(1, &landingMarkerVao);
     glDeleteBuffers(1, &landingMarkerVbo);
@@ -1410,6 +1420,143 @@ static void DrawPowerUpAura(const glm::vec3& position, ULONGLONG nowMs)
     if (!blendEnabled) glDisable(GL_BLEND);
 }
 
+// [12.1] 방패 PNG의 나무 판과 금속 테두리를 육면체의 각 면에 맞춘다.
+static void InitializeMatchShield()
+{
+    // PNG를 256칸으로 보았을 때 오른쪽의 어두운 금속 부분을 옆면에 쓴다.
+    constexpr float imageSize = 256.0f;
+    constexpr UVRect metalEdge{ 178.0f, 90.0f, 4.0f, 70.0f };
+    const UVRect faceUVs[] = { metalEdge, metalEdge, metalEdge, metalEdge, metalEdge, metalEdge };
+    const bool flips[6]{};
+    std::vector<glm::vec3> positions, normals;
+    std::vector<glm::vec2> texCoords;
+    Init::makeCube(glm::vec3(0.36f, 0.54f, 0.06f), faceUVs, flips, imageSize, imageSize,
+        positions, normals, texCoords);
+
+    // PNG 속 기울어진 나무 판의 네 모서리를 앞뒤의 평평한 면에 맞춘다.
+    const auto imageUV = [imageSize](float x, float y) {
+        return glm::vec2(x / imageSize, 1.0f - y / imageSize);
+    };
+    const glm::vec2 lowerLeft = imageUV(58.0f, 203.0f);
+    const glm::vec2 lowerRight = imageUV(173.0f, 247.0f);
+    const glm::vec2 upperRight = imageUV(173.0f, 57.0f);
+    const glm::vec2 upperLeft = imageUV(58.0f, 18.0f);
+    const glm::vec2 panelUVs[] = { lowerLeft, lowerRight, upperRight, upperRight, upperLeft, lowerLeft };
+    std::copy_n(panelUVs, 6, texCoords.begin() + 24); // +Z 면
+    std::copy_n(panelUVs, 6, texCoords.begin() + 30); // -Z 면
+
+    Init::uploadMesh(positions, normals, texCoords,
+        matchShield.vao, matchShield.vbo, matchShield.nbo, matchShield.tbo, matchShield.count);
+}
+
+// [12.1] 방패와 방어 고리가 같은 위치를 기준으로 시작한다.
+static glm::vec3 GetMatchShieldCenter(const glm::vec3& position, float forward)
+{
+    return position + glm::vec3(0.0f, 0.07f, 0.80f * forward);
+}
+
+// [12.1] 방패가 켜진 캐릭터 앞에 텍스처를 입힌 얇은 육면체를 띄운다.
+static void DrawMatchShield(const glm::vec3& position, int slot)
+{
+    if (matchShield.vao == 0) InitializeMatchShield();
+
+    // 0번 자리는 +Z, 1번 자리는 -Z를 바라본다.
+    const float forward = slot == 0 ? 1.0f : -1.0f;
+    const glm::vec3 center = GetMatchShieldCenter(position, forward);
+    const glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
+
+    const GLint cutoutLoc = glGetUniformLocation(shaderProgramID, "textureAlphaCutout");
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "model"), 1, GL_FALSE, &model[0][0]);
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 1);
+    glUniform1i(cutoutLoc, 1);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameUITextures.itemShield);
+    glBindVertexArray(matchShield.vao);
+    glDrawArrays(GL_TRIANGLES, 0, matchShield.count);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUniform1i(cutoutLoc, 0);
+}
+
+// [12.1] 흰 고리를 양쪽 시점에서 볼 수 있도록 세로로 세운다.
+static void InitializeShieldBlockRing()
+{
+    constexpr int segments = 40;
+    constexpr float innerRadius = 0.93f;
+    glm::vec3 vertices[2 * (segments + 1)];
+    for (int i = 0; i <= segments; ++i) {
+        const float angle = glm::two_pi<float>() * i / segments;
+        const glm::vec3 direction(std::cos(angle), std::sin(angle), 0.0f);
+        vertices[2 * i] = direction;
+        vertices[2 * i + 1] = innerRadius * direction;
+    }
+
+    glGenVertexArrays(1, &shieldBlockRing.vao);
+    glGenBuffers(1, &shieldBlockRing.vbo);
+    glBindVertexArray(shieldBlockRing.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, shieldBlockRing.vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), nullptr);
+    glEnableVertexAttribArray(0);
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    shieldBlockRing.count = 2 * (segments + 1);
+}
+
+// [12.1] 방패 앞에서 시작한 고리 두 개가 차례로 캐릭터 뒤쪽으로 지나간다.
+static void DrawShieldBlockEffect(const glm::vec3& position, int slot, ULONGLONG elapsedMs)
+{
+    constexpr ULONGLONG ringDurationMs = 300;
+    constexpr ULONGLONG secondRingDelayMs = 120;
+    if (elapsedMs >= ringDurationMs + secondRingDelayMs) return;
+    if (shieldBlockRing.vao == 0) InitializeShieldBlockRing();
+
+    const float forward = slot == 0 ? 1.0f : -1.0f;
+    const glm::vec3 shieldCenter = GetMatchShieldCenter(position, forward);
+    const glm::vec3 start = shieldCenter + glm::vec3(0.0f, 0.0f, 0.12f * forward);
+    const glm::vec3 end(shieldCenter.x, shieldCenter.y, position.z - 0.60f * forward);
+
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    const GLboolean cullEnabled = glIsEnabled(GL_CULL_FACE);
+    GLboolean depthWrite;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthWrite);
+    GLint srcRgb, dstRgb, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDisable(GL_CULL_FACE);
+    glDepthMask(GL_FALSE);
+
+    const GLint modelLoc = glGetUniformLocation(shaderProgramID, "model");
+    const GLint uiModeLoc = glGetUniformLocation(shaderProgramID, "uiMode");
+    const GLint uiColorLoc = glGetUniformLocation(shaderProgramID, "uiColor");
+    glUniform1i(uiModeLoc, 1);
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 0);
+    glBindVertexArray(shieldBlockRing.vao);
+
+    for (const ULONGLONG delayMs : { 0ULL, secondRingDelayMs }) {
+        if (elapsedMs < delayMs || elapsedMs - delayMs >= ringDurationMs) continue;
+        const float progress = static_cast<float>(elapsedMs - delayMs) / ringDurationMs;
+        const float radius = glm::mix(0.84f, 1.02f, progress);
+        const glm::vec3 center = glm::mix(start, end, progress);
+        const glm::mat4 model = glm::scale(glm::translate(glm::mat4(1.0f), center),
+            glm::vec3(radius, radius, 1.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+        glUniform4f(uiColorLoc, 1.0f, 1.0f, 1.0f, 0.90f * (1.0f - progress));
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, shieldBlockRing.count);
+    }
+
+    glBindVertexArray(0);
+    glUniform1i(uiModeLoc, 0);
+    glDepthMask(depthWrite);
+    if (cullEnabled) glEnable(GL_CULL_FACE);
+    glBlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+    if (!blendEnabled) glDisable(GL_BLEND);
+}
+
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 {
 	glEnable(GL_CULL_FACE);
@@ -1465,6 +1612,15 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
             }
         }
         glUniform1f(hitTintLoc, 0.0f);
+
+        // [12.1] 방패는 시점과 관계없이 사용하는 캐릭터의 위치를 따라간다.
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject* player = gameClient.GetObject(slot);
+            if (player && player->shieldActive) {
+                DrawMatchShield(player->renderPos, slot);
+            }
+        }
+
         std::vector<SnowWallVisual> walls;
         // [11.23] 저장된 눈덩이를 서버가 알려 준 표시 위치에 그린다.
         for (const auto& entry : gameClient.GetObjects()) {
@@ -1486,8 +1642,13 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
         const ULONGLONG nowMs = GetTickCount64();
         for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
             const ClientObject* player = gameClient.GetObject(slot);
-            if (player && player->powerUpActive) {
+            if (!player) continue;
+            if (player->powerUpActive) {
                 DrawPowerUpAura(player->renderPos, nowMs);
+            }
+            const ULONGLONG blockMs = gameClient.GetLastShieldBlockMs(slot);
+            if (blockMs != 0) {
+                DrawShieldBlockEffect(player->renderPos, slot, nowMs - blockMs);
             }
         }
 
