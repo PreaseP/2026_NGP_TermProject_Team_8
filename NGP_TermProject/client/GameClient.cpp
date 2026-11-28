@@ -841,8 +841,10 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         }
     }
 
+    // [11.28] 정상 종료와 상대 이탈 모두 결과 화면에서 방 복귀를 기다린다.
+    const bool returningAfterMatch = currentState == CLIENT_RESULT;
     // [11.12] 현재 방의 참가자 정보를 검사하고 저장한다.
-    if (packet[1] == S2C_ROOM_INFO && currentState == CLIENT_ROOM) {
+    if (packet[1] == S2C_ROOM_INFO && (currentState == CLIENT_ROOM || returningAfterMatch)) {
         S2C_RoomInfo roomInfo{};
         std::memcpy(&roomInfo, packet, sizeof(roomInfo));
         if (roomInfo.room_id >= MAX_ROOMS || roomInfo.room_id != myRoomId) {
@@ -871,6 +873,20 @@ void GameClient::ProcessPacket(const unsigned char* packet)
 
             // [11.12] 이름 규칙은 다시 검사하지 않고 문자열 끝만 보장한다.
             player.name[MAX_NAME_LEN - 1] = '\0';
+        }
+
+        if (returningAfterMatch) {
+            if (mySlot < 0 || mySlot >= MAX_ROOM_PLAYERS ||
+                !roomInfo.players[mySlot].connected ||
+                roomInfo.players[mySlot].character != CHAR_NONE) {
+                return;
+            }
+
+            // [11.28] 경기 데이터를 비우고 같은 방의 대기실로 돌아간다.
+            ClearWorld();
+            inputHandler.Reset();
+            errorMessage.clear();
+            currentState = CLIENT_ROOM;
         }
 
         // [11.12] 두 자리 모두 검사가 끝나면 저장된 정보를 한 번에 바꾼다.
