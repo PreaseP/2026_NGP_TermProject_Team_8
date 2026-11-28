@@ -14,6 +14,7 @@ struct ClientObject {
     CHARACTER_TYPE character = CHAR_NONE;
     unsigned char ownerSlot = 0xFF; // [11.23] 눈덩이를 던진 자리. 아직 없으면 0xFF다.
     bool powered = false; // [11.23] 강화된 눈덩이인지 저장한다.
+    bool powerUpActive = false; // [12.1] 플레이어가 다음 눈덩이에 쓸 공격 강화를 가지고 있는지 저장한다.
     float height = 0.0f; // [11.26] 눈 벽의 현재 높이
     float targetHeight = 0.0f; // [11.26] 눈 벽의 목표 높이
     float startHeight = 0.0f; // [11.26] 높이가 바뀌기 시작할 때 보이던 높이

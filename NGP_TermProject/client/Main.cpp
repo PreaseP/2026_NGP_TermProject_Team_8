@@ -166,6 +166,9 @@ struct GameUITextures {
     GLuint itemPowerUp = 0; // [11.30] 공격 강화 아이콘
 };
 static GameUITextures gameUITextures;
+static GLuint powerUpBorderTexture = 0; // [12.1] 내 화면 가장자리
+static GLuint powerUpAuraTexture = 0; // [12.1] 강화한 플레이어의 발밑
+static GLuint poweredSnowballTexture = 0; // [12.1] 던진 강화 눈덩이의 붉은 눈 무늬
 
 // [변경 1] 창과 그래픽 준비를 맡는 함수 선언. argc는 GLUT가 갱신할 수 있어 참조로 받는다.
 bool InitOpenGL(int& argc, char** argv);
@@ -198,7 +201,7 @@ void checkAllSnowballCollisions();
 
 void initializeFaceBuffers();
 void loadFaceTextures();
-GLuint loadTexture(const char* path, GLint minFilter = GL_LINEAR);
+GLuint loadTexture(const char* path, GLint minFilter = GL_LINEAR, bool whiteFallback = true);
 void renderCharacterFace(GLuint textureID, float x, float y, float size, int screenWidth, int screenHeight);
 // void drawCharacterFaces(int winW, int winH);
 
@@ -265,6 +268,10 @@ bool InitOpenGL(int& argc, char** argv)
 	// [11.30] HUD 크기로 줄일 때 밉맵으로 아이콘을 그린다.
 	gameUITextures.itemShield = loadTexture("Images/Hud/item_shield.png", GL_LINEAR_MIPMAP_LINEAR);
 	gameUITextures.itemPowerUp = loadTexture("Images/Hud/item_power_up.png", GL_LINEAR_MIPMAP_LINEAR);
+	// [12.1] 공격 강화가 켜져 있는 동안 그릴 두 이미지를 준비한다.
+	powerUpBorderTexture = loadTexture("Images/Item/item_border_power_up.png", GL_LINEAR, false);
+	powerUpAuraTexture = loadTexture("Images/Item/item_aura_power_up.png", GL_LINEAR_MIPMAP_LINEAR, false);
+	poweredSnowballTexture = loadTexture("Images/Item/snow_power_up.png", GL_LINEAR_MIPMAP_LINEAR, false);
 	return true;
 }
 
@@ -306,7 +313,7 @@ void OnExit()
 	const GLuint textureIds[] = { gameUITextures.stevePortrait, gameUITextures.alexPortrait,
 		gameUITextures.fullHeart, gameUITextures.emptyHeart, gameUITextures.fullHeartFlash,
 		gameUITextures.emptyHeartFlash, gameUITextures.itemSlot, gameUITextures.itemShield,
-		gameUITextures.itemPowerUp };
+		gameUITextures.itemPowerUp, powerUpBorderTexture, powerUpAuraTexture, poweredSnowballTexture };
 	glDeleteTextures(static_cast<GLsizei>(sizeof(textureIds) / sizeof(textureIds[0])), textureIds);
 	gameUITextures = {};
 	faceVAO = faceVBO = steveFaceTextureID = alexFaceTextureID = 0;
@@ -364,7 +371,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-GLuint loadTexture(const char* path, GLint minFilter)
+GLuint loadTexture(const char* path, GLint minFilter, bool whiteFallback)
 {
 	GLuint textureID;
 	glGenTextures(1, &textureID);
@@ -391,13 +398,22 @@ GLuint loadTexture(const char* path, GLint minFilter)
 		else
 			format = GL_RGB;
 
+		// [12.1] PNG가 넘긴 픽셀은 행 사이에 빈 바이트가 없이 붙어 있다.
+		GLint previousAlignment;
+		glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 		glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
 		glGenerateMipmap(GL_TEXTURE_2D);
 
 		std::cout << "텍스처 로드 성공: " << path << " (" << width << "x" << height << ", " << channels << " channels)" << std::endl;
 	}
 	else {
 		std::cerr << "텍스처 로드 실패: " << path << std::endl;
+		if (!whiteFallback) {
+			glDeleteTextures(1, &textureID);
+			return 0;
+		}
 		unsigned char whitePixel[3] = { 255, 255, 255 };
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 1, 1, 0, GL_RGB, GL_UNSIGNED_BYTE, whitePixel);
 	}
@@ -514,8 +530,16 @@ void renderCharacterFace(GLuint textureID, float x, float y, float size, int scr
 // 	glViewport(0, 0, winW, winH);
 // }
 
+constexpr ULONGLONG powerUpPulsePeriodMs = 1500;
+
+// [12.1] 현재 시각을 한 주기 안의 각도로 바꾼다.
+static float PowerUpAnimationAngle(ULONGLONG nowMs, ULONGLONG periodMs)
+{
+    return glm::two_pi<float>() * static_cast<float>(nowMs % periodMs) / static_cast<float>(periodMs);
+}
+
 // [11.25] 경기 화면 위에 내 초상화, 하트 5개, 빈 아이템 틀을 그린다.
-static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHeight)
+static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHeight, bool powerUpActive)
 {
     initializeFaceBuffers();
 
@@ -525,6 +549,7 @@ static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHe
     const glm::mat4 view(1.0f);
     const GLint modelLoc = glGetUniformLocation(shaderProgramID, "model");
     const GLint uiModeLoc = glGetUniformLocation(shaderProgramID, "uiMode");
+    const GLint uiColorLoc = glGetUniformLocation(shaderProgramID, "uiColor");
 
     const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
     GLint srcRgb, dstRgb, srcAlpha, dstAlpha;
@@ -541,19 +566,34 @@ static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHe
     glUniform1i(uiModeLoc, 1);
     glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 1);
     glUniform4f(glGetUniformLocation(shaderProgramID, "uiUVRect"), 0.0f, 0.0f, 1.0f, 1.0f);
-    glUniform4f(glGetUniformLocation(shaderProgramID, "uiColor"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4f(uiColorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(faceVAO);
 
-    // [11.25] 왼쪽 위 기준 위치를 기존 사각형의 중심 좌표로 바꾼다.
-    const auto drawIcon = [&](GLuint texture, float left, float top, float size) {
-        const float halfSize = size * scale / 2.0f;
+    const auto drawImage = [&](GLuint texture, float left, float top, float width, float height) {
+        const float halfWidth = width / 2.0f;
+        const float halfHeight = height / 2.0f;
         glm::mat4 model = glm::translate(glm::mat4(1.0f),
-            glm::vec3(left * scale + halfSize, winHeight - top * scale - halfSize, 0.0f));
-        model = glm::scale(model, glm::vec3(halfSize, halfSize, 1.0f));
+            glm::vec3(left + halfWidth, winHeight - top - halfHeight, 0.0f));
+        model = glm::scale(model, glm::vec3(halfWidth, halfHeight, 1.0f));
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
         glBindTexture(GL_TEXTURE_2D, texture);
         glDrawArrays(GL_TRIANGLES, 0, 6);
+    };
+
+    // [12.1] 내 강화가 켜져 있으면 창 전체에 테두리 이미지를 깔고 그 위에 HUD를 그린다.
+    if (powerUpActive && powerUpBorderTexture != 0) {
+        // [12.1] 테두리의 알파 배율만 0.8에서 1.0 사이로 바꾼다.
+        const float angle = PowerUpAnimationAngle(GetTickCount64(), powerUpPulsePeriodMs);
+        const float opacity = 0.9f + 0.1f * std::sin(angle);
+        glUniform4f(uiColorLoc, 1.0f, 1.0f, 1.0f, opacity);
+        drawImage(powerUpBorderTexture, 0.0f, 0.0f, float(winWidth), float(winHeight));
+        glUniform4f(uiColorLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+    }
+
+    // [11.25] 왼쪽 위 기준 위치를 기존 사각형의 중심 좌표로 바꾼다.
+    const auto drawIcon = [&](GLuint texture, float left, float top, float size) {
+        drawImage(texture, left * scale, top * scale, size * scale, size * scale);
     };
 
     const GLuint portrait = character == CHAR_STEVE ? gameUITextures.stevePortrait : gameUITextures.alexPortrait;
@@ -597,7 +637,7 @@ static void DrawGameUI(CHARACTER_TYPE character, int hp, int winWidth, int winHe
             glm::vec3((left + width / 2.0f) * scale, winHeight - (top + height / 2.0f) * scale, 0.0f));
         model = glm::scale(model, glm::vec3(width * scale / 2.0f, height * scale / 2.0f, 1.0f));
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-        glUniform4fv(glGetUniformLocation(shaderProgramID, "uiColor"), 1, &color[0]);
+        glUniform4fv(uiColorLoc, 1, &color[0]);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     };
     glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 0);
@@ -1160,7 +1200,7 @@ GLvoid Drawscene()
         }
         renderWorld(view, projection);
         // [11.25] 맵과 캐릭터를 그린 다음 HUD를 화면 위에 올린다.
-        DrawGameUI(me->character, gameClient.GetHP(mySlot), winW, winH);
+        DrawGameUI(me->character, gameClient.GetHP(mySlot), winW, winH, me->powerUpActive);
 		break;
 	}
 
@@ -1319,6 +1359,57 @@ static void DrawLandingMarker(const LandingMarker& marker)
     if (!blendEnabled) glDisable(GL_BLEND);
 }
 
+// [12.1] 기존 이미지 사각형을 바닥에 눕혀 강화한 캐릭터의 발밑에 그린다.
+static void DrawPowerUpAura(const glm::vec3& position, ULONGLONG nowMs)
+{
+    if (powerUpAuraTexture == 0) return;
+
+    constexpr float baseRadius = 1.1f * BLOCK_SIZE;
+    constexpr float groundY = BLOCK_SIZE * 0.5f + 0.02f;
+    constexpr ULONGLONG rotationPeriodMs = 8000;
+    // [12.1] 발밑 중심은 고정하고 반지름만 3%씩 커졌다 작아지게 한다.
+    const float pulseAngle = PowerUpAnimationAngle(nowMs, powerUpPulsePeriodMs);
+    const float radius = baseRadius * (1.0f + 0.03f * std::sin(pulseAngle));
+    const float rotationAngle = PowerUpAnimationAngle(nowMs, rotationPeriodMs);
+
+    // [12.1] 바닥 끝을 넘어가도 원 전체를 그리며, 위를 향한 Y축을 중심으로 회전한다.
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(position.x, groundY, position.z));
+    model = glm::rotate(model, rotationAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+    model = glm::rotate(model, -glm::half_pi<float>(), glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::scale(model, glm::vec3(radius, radius, 1.0f));
+
+    initializeFaceBuffers();
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    GLboolean depthWrite;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &depthWrite);
+    GLint srcRgb, dstRgb, srcAlpha, dstAlpha;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &srcRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &dstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &srcAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &dstAlpha);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glDepthMask(GL_FALSE);
+
+    const GLint uiModeLoc = glGetUniformLocation(shaderProgramID, "uiMode");
+    glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "model"), 1, GL_FALSE, &model[0][0]);
+    glUniform1i(uiModeLoc, 1);
+    glUniform1i(glGetUniformLocation(shaderProgramID, "useTexture"), 1);
+    glUniform4f(glGetUniformLocation(shaderProgramID, "uiColor"), 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4f(glGetUniformLocation(shaderProgramID, "uiUVRect"), 0.0f, 0.0f, 1.0f, 1.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, powerUpAuraTexture);
+    glBindVertexArray(faceVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUniform1i(uiModeLoc, 0);
+
+    glDepthMask(depthWrite);
+    glBlendFuncSeparate(srcRgb, dstRgb, srcAlpha, dstAlpha);
+    if (!blendEnabled) glDisable(GL_BLEND);
+}
+
 GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
 {
 	glEnable(GL_CULL_FACE);
@@ -1380,7 +1471,9 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
             const ClientObject& object = entry.second;
             if (object.type == OBJ_SNOWBALL) {
                 matchSnowball->setPosition(object.renderPos);
-                matchSnowball->render(shaderProgramID);
+                // [12.1] 서버가 강화했다고 알려 준 눈덩이에만 붉은 눈 무늬를 씌운다.
+                const GLuint texture = object.powered ? poweredSnowballTexture : 0;
+                matchSnowball->render(shaderProgramID, glm::vec3(1.0f), texture);
             } else if (object.type == OBJ_SNOW_WALL) {
                 // [11.26] 이번 프레임에 표시할 눈 벽의 중심과 높이를 모은다.
                 walls.push_back({ object.renderPos, object.height });
@@ -1388,6 +1481,16 @@ GLvoid renderWorld(const glm::mat4& view, const glm::mat4& projection)
         }
         matchSnowWalls.setWallVisuals(std::move(walls));
         matchSnowWalls.render(shaderProgramID);
+
+        // [12.1] 강화가 켜진 자리마다 해당 진영 바닥에 아우라를 그린다.
+        const ULONGLONG nowMs = GetTickCount64();
+        for (int slot = 0; slot < MAX_ROOM_PLAYERS; ++slot) {
+            const ClientObject* player = gameClient.GetObject(slot);
+            if (player && player->powerUpActive) {
+                DrawPowerUpAura(player->renderPos, nowMs);
+            }
+        }
+
         // [11.24] 내 차징 중에만 예상 착지점을 바닥에 그린다.
         float chargeSeconds;
         if (gameClient.TryGetChargeSeconds(chargeSeconds)) {

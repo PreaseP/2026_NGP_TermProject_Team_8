@@ -43,7 +43,8 @@ public:
 
     void update(float deltaTime, Snow& snowSystem, const Map& gameMap);
 
-    void render(GLuint shaderProgram, const glm::vec3& color = glm::vec3(1.0f, 1.0f, 1.0f)) const;
+    void render(GLuint shaderProgram, const glm::vec3& color = glm::vec3(1.0f, 1.0f, 1.0f),
+        GLuint texture = 0) const;
 
     bool getIsActive() const { return isActive; }
     glm::vec3 getPosition() const { return position; }

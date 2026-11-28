@@ -593,6 +593,21 @@ void GameClient::ApplyWorldPacket(const unsigned char* packet)
             return;
         }
 
+        // [12.1] 서버가 알려 준 자리의 공격 강화를 켜거나 끈다.
+        if (state.status == STATUS_POWER_UP) {
+            if (state.object_id < 0 || state.object_id >= MAX_ROOM_PLAYERS ||
+                (state.value != 0.0f && state.value != 1.0f)) {
+                HandleDisconnect();
+                return;
+            }
+
+            const auto found = objects.find(state.object_id);
+            if (found == objects.end() || found->second.type != OBJ_CHARACTER) return;
+
+            found->second.powerUpActive = (state.value == 1.0f);
+            return;
+        }
+
         if (state.status != STATUS_ARM_STATE) return;
         if (state.object_id < 0 ||
             (state.value != ARM_IDLE && state.value != ARM_RUN &&

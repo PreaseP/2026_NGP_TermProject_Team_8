@@ -343,7 +343,7 @@ bool Snowball::checkWallCollision(const Map& gameMap) const
     return false;
 }
 
-void Snowball::render(GLuint shaderProgram, const glm::vec3& color) const
+void Snowball::render(GLuint shaderProgram, const glm::vec3& color, GLuint texture) const
 {
     if (!isActive || !isInitialized) return;
 
@@ -368,12 +368,17 @@ void Snowball::render(GLuint shaderProgram, const glm::vec3& color) const
         glUniform3f(vColorLoc, color.r, color.g, color.b);
     }
     if (useTextureLoc != -1) {
-        glUniform1i(useTextureLoc, 0);
+        glUniform1i(useTextureLoc, texture != 0);
+    }
+    if (texture != 0) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
     }
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, vertexCount);
     glBindVertexArray(0);
+    if (texture != 0) glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 bool Snowball::checkCollision(const glm::vec3& point, float distance) const
