@@ -380,6 +380,7 @@ void GameClient::ClearWorld()
         lastShieldBlockMs[slot] = 0; // [12.1] 이전 경기에 막았던 기록을 지운다.
     }
     gameStartResult = {};
+    gameOverResult = {};
     for (CHARACTER_TYPE& character : gameStartResult.character) {
         character = CHAR_NONE;
     }
@@ -753,6 +754,21 @@ void GameClient::ProcessPacket(const unsigned char* packet)
         S2C_GameStartResult result{};
         std::memcpy(&result, packet, sizeof(result));
         HandleGameStartResult(result);
+        return;
+    }
+    // [11.28] 경기 중 받은 서버 결과를 저장하고 결과 화면으로 바꾼다.
+    if (packet[1] == S2C_GAME_OVER && currentState == CLIENT_PLAYING) {
+        S2C_GameOver result{};
+        std::memcpy(&result, packet, sizeof(result));
+        if (result.winner_slot >= MAX_ROOM_PLAYERS ||
+            (result.reason != END_HP_ZERO && result.reason != END_OPPONENT_LEFT)) {
+            HandleDisconnect();
+            return;
+        }
+
+        gameOverResult = result;
+        inputHandler.Reset();
+        currentState = CLIENT_RESULT;
         return;
     }
     // [11.23] 경기 중 생성 패킷도 월드 처리로 넘긴다.

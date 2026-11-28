@@ -52,6 +52,9 @@ public:
     const S2C_GameStartResult* GetGameStartResult() const {
         return gameStartResult.success ? &gameStartResult : nullptr;
     }
+    const S2C_GameOver* GetGameOverResult() const {
+        return currentState == CLIENT_RESULT ? &gameOverResult : nullptr;
+    }
     const ClientObject* GetObject(int objectId) const {
         const auto found = objects.find(objectId);
         return found != objects.end() ? &found->second : nullptr;
@@ -132,6 +135,7 @@ private:
     int mySlot = -1; // 방 안에서 내가 차지한 자리 번호
     RoomPlayerInfo roomPlayers[MAX_ROOM_PLAYERS]{}; // [11.12] 현재 방의 두 자리 참가자 정보
     S2C_GameStartResult gameStartResult{};
+    S2C_GameOver gameOverResult{};
     std::unordered_map<int, ClientObject> objects;
     int hp[MAX_ROOM_PLAYERS]{};
     ULONGLONG lastHitMs[MAX_ROOM_PLAYERS]{};

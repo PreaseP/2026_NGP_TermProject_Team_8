@@ -265,6 +265,7 @@ bool InitOpenGL(int& argc, char** argv)
 
 	// 타이틀 화면 초기화
 	titleScreen.initialize();
+	finishScreen.initialize();
 	// [11.25] 경기 화면 위에 올릴 이미지도 미리 불러온다.
 	gameUITextures.stevePortrait = loadTexture("Images/Hud/portrait_steve.png");
 	gameUITextures.alexPortrait = loadTexture("Images/Hud/portrait_alex.png");
@@ -714,6 +715,7 @@ void initializeGame() {
 
 void Keyboard(unsigned char key, int x, int y)
 {
+	if (gameClient.GetState() == CLIENT_RESULT) return;
 	if (gameClient.GetState() == CLIENT_PLAYING) {
 		gameClient.OnKeyDown(key);
 		return;
@@ -1214,8 +1216,41 @@ GLvoid Drawscene()
 		break;
 	}
 
-	case CLIENT_RESULT:
+	case CLIENT_RESULT: {
+		const S2C_GameOver* result = gameClient.GetGameOverResult();
+		const S2C_GameStartResult* start = gameClient.GetGameStartResult();
+		if (result == nullptr || start == nullptr) break;
+
+		// [11.28] 승자 이미지는 캐릭터로 고르고, 내 승패는 자리 번호로 판단한다.
+		const Winner resultWinner = start->character[result->winner_slot] == CHAR_STEVE
+			? Winner::STEVE : Winner::ALEX;
+		glViewport(0, 0, glutGet(GLUT_WINDOW_WIDTH), glutGet(GLUT_WINDOW_HEIGHT));
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "uiMode"), 0);
+		glUniform1i(glGetUniformLocation(shaderProgramID, "textureAlphaCutout"), 0);
+		if (winner != resultWinner) {
+			winner = resultWinner;
+			finishScreen.setWinner(winner);
+		}
+		finishScreen.render(shaderProgramID);
+
+		const bool won = result->winner_slot == gameClient.GetMySlot();
+		const glm::mat4 projection = glm::ortho(0.0f, 1200.0f, 675.0f, 0.0f, -1.0f, 1.0f);
+		const GLint uiMode = glGetUniformLocation(shaderProgramID, "uiMode");
+		glUniformMatrix4fv(glGetUniformLocation(shaderProgramID, "projection"), 1, GL_FALSE, &projection[0][0]);
+		glUniform1i(uiMode, 1);
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		titleScreen.centeredText(shaderProgramID, won ? "YOU WIN" : "YOU LOSE", 666.0f,
+			1.0f, 1.0f, 1.0f, 30.0f);
+		glBindVertexArray(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glDisable(GL_BLEND);
+		glEnable(GL_DEPTH_TEST);
+		glUniform1i(uiMode, 0);
 		break;
+	}
 	}
 
 	glutSwapBuffers();
